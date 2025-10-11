@@ -436,9 +436,112 @@
             from { transform: translateX(-100%); }
             to { transform: translateX(0); }
         }
+        
+        /* Debug Overlay Styles */
+        .debug-item {
+            margin: 5px 0;
+            padding: 3px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .debug-item:last-child {
+            border-bottom: none;
+        }
+        
+        .debug-log {
+            font-size: 11px;
+            margin: 2px 0;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        
+        .debug-log.success {
+            background: rgba(0, 255, 0, 0.2);
+            color: #00ff00;
+        }
+        
+        .debug-log.error {
+            background: rgba(255, 0, 0, 0.2);
+            color: #ff6666;
+        }
+        
+        .debug-log.warning {
+            background: rgba(255, 165, 0, 0.2);
+            color: #ffaa00;
+        }
+        
+        .debug-log.info {
+            background: rgba(0, 150, 255, 0.2);
+            color: #66ccff;
+        }
+        
+        .debug-status {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        .debug-status.success {
+            background: #00ff00;
+            color: #000;
+        }
+        
+        .debug-status.error {
+            background: #ff0000;
+            color: #fff;
+        }
+        
+        .debug-status.warning {
+            background: #ffaa00;
+            color: #000;
+        }
+        
+        .debug-status.info {
+            background: #0066cc;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
+    <!-- Debug Overlay -->
+    <div id="debugOverlay" style="position: fixed; top: 10px; right: 10px; width: 300px; background: rgba(0,0,0,0.9); color: white; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px; z-index: 10000; max-height: 400px; overflow-y: auto; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0; color: #00ff00;">🔧 Debug Console</h3>
+            <button id="toggleDebug" onclick="toggleDebugOverlay()" style="background: #333; color: white; border: 1px solid #666; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Hide</button>
+        </div>
+        <div id="debugContent">
+            <div class="debug-item">
+                <strong>🔗 Supabase URL:</strong> <span id="debugUrl">Checking...</span>
+            </div>
+            <div class="debug-item">
+                <strong>🔑 Supabase Key:</strong> <span id="debugKey">Checking...</span>
+            </div>
+            <div class="debug-item">
+                <strong>👤 User ID:</strong> <span id="debugUserId">Checking...</span>
+            </div>
+            <div class="debug-item">
+                <strong>📱 Storage Mode:</strong> <span id="debugStorage">Checking...</span>
+            </div>
+            <div class="debug-item">
+                <strong>🔗 Connection:</strong> <span id="debugConnection">Testing...</span>
+            </div>
+            <div class="debug-item">
+                <strong>📊 Last Operation:</strong> <span id="debugLastOp">None</span>
+            </div>
+            <div class="debug-item">
+                <strong>📝 Notes Count:</strong> <span id="debugNotesCount">0</span>
+            </div>
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #444;">
+                <strong>📋 Recent Logs:</strong>
+                <div id="debugLogs" style="max-height: 150px; overflow-y: auto; margin-top: 5px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Toggle Button -->
+    <button id="debugToggleBtn" onclick="toggleDebugOverlay()" style="position: fixed; top: 10px; right: 10px; background: #007bff; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; z-index: 10001; font-size: 16px;">🔧</button>
+
     <div class="container">
         <div class="header">
             <h1>📝 Smart Notes App</h1>
@@ -563,10 +666,73 @@
         supabaseClient.from('notes').select('count').then(({ data, error }) => {
             if (error) {
                 console.error('❌ Supabase connection test failed:', error);
+                updateDebugConnection('error', 'Connection Failed');
             } else {
                 console.log('✅ Supabase connection test successful:', data);
+                updateDebugConnection('success', 'Connected');
             }
         });
+        
+        // Debug overlay functions
+        function toggleDebugOverlay() {
+            const overlay = document.getElementById('debugOverlay');
+            const btn = document.getElementById('debugToggleBtn');
+            
+            if (overlay.style.display === 'none' || overlay.style.display === '') {
+                overlay.style.display = 'block';
+                btn.style.display = 'none';
+                updateDebugInfo();
+            } else {
+                overlay.style.display = 'none';
+                btn.style.display = 'block';
+            }
+        }
+        
+        function updateDebugInfo() {
+            // Update Supabase URL
+            const urlStatus = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id') ? 'success' : 'error';
+            const urlText = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id') ? 'Set' : 'Not Set';
+            document.getElementById('debugUrl').innerHTML = `<span class="debug-status ${urlStatus}">${urlText}</span>`;
+            
+            // Update Supabase Key
+            const keyStatus = SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('your-anon-key-here') ? 'success' : 'error';
+            const keyText = SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('your-anon-key-here') ? 'Set' : 'Not Set';
+            document.getElementById('debugKey').innerHTML = `<span class="debug-status ${keyStatus}">${keyText}</span>`;
+            
+            // Update Notes Count
+            if (window.notesApp) {
+                document.getElementById('debugNotesCount').textContent = window.notesApp.notes.length;
+            }
+        }
+        
+        function updateDebugConnection(status, message) {
+            document.getElementById('debugConnection').innerHTML = `<span class="debug-status ${status}">${message}</span>`;
+        }
+        
+        function updateDebugLastOp(operation, status, details = '') {
+            const statusClass = status === 'success' ? 'success' : status === 'error' ? 'error' : 'info';
+            document.getElementById('debugLastOp').innerHTML = `<span class="debug-status ${statusClass}">${operation}</span>`;
+            if (details) {
+                addDebugLog(operation, status, details);
+            }
+        }
+        
+        function addDebugLog(operation, type, message) {
+            const logsDiv = document.getElementById('debugLogs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `debug-log ${type}`;
+            logDiv.textContent = `[${new Date().toLocaleTimeString()}] ${operation}: ${message}`;
+            
+            logsDiv.insertBefore(logDiv, logsDiv.firstChild);
+            
+            // Keep only last 10 logs
+            while (logsDiv.children.length > 10) {
+                logsDiv.removeChild(logsDiv.lastChild);
+            }
+        }
+        
+        // Initialize debug info
+        setTimeout(updateDebugInfo, 1000);
     </script>
     
     <script>
@@ -576,7 +742,11 @@
                 this.currentFilter = 'all';
                 this.editingNoteId = null;
                 this.user = null;
+                this.useLocalStorage = false;
                 this.init();
+                
+                // Make app globally accessible for debug
+                window.notesApp = this;
             }
             
             async init() {
@@ -600,11 +770,13 @@
                     if (user) {
                         this.user = user;
                         console.log('✅ User authenticated:', user.email);
+                        document.getElementById('debugUserId').innerHTML = `<span class="debug-status success">${user.email}</span>`;
                     } else {
                         // For demo purposes, we'll use a guest user
                         // In production, you'd redirect to login
                         console.log('⚠️ No user authenticated, using guest mode');
                         this.user = { id: 'guest-user-id' };
+                        document.getElementById('debugUserId').innerHTML = `<span class="debug-status warning">Guest User</span>`;
                     }
                 } catch (error) {
                     console.error('❌ Auth error:', error);
@@ -657,6 +829,8 @@
                         this.useLocalStorage = true;
                         this.loadNotesFromLocalStorage();
                         this.updateStatusIndicator();
+                        document.getElementById('debugStorage').innerHTML = `<span class="debug-status warning">localStorage</span>`;
+                        addDebugLog('Storage', 'warning', 'Using localStorage fallback');
                         return;
                     }
                     
@@ -707,7 +881,10 @@
                     // Check if we should use localStorage fallback
                     if (this.useLocalStorage || !SUPABASE_URL || SUPABASE_URL.includes('your-project-id')) {
                         console.log('📱 Creating note in localStorage (fallback mode)');
-                        return this.createNoteInLocalStorage(title, content);
+                        const result = this.createNoteInLocalStorage(title, content);
+                        updateDebugLastOp('Create Note', 'warning', 'Saved to localStorage');
+                        document.getElementById('debugNotesCount').textContent = this.notes.length;
+                        return result;
                     }
                     
                     console.log('🗄️ Creating note in Supabase');
@@ -739,12 +916,17 @@
                         console.log('🔄 Falling back to localStorage');
                         this.useLocalStorage = true;
                         this.updateStatusIndicator();
-                        return this.createNoteInLocalStorage(title, content);
+                        updateDebugLastOp('Create Note', 'error', 'Supabase failed, using localStorage');
+                        const result = this.createNoteInLocalStorage(title, content);
+                        document.getElementById('debugNotesCount').textContent = this.notes.length;
+                        return result;
                     }
                     
                     console.log('✅ Note created successfully in Supabase:', data);
                     this.notes.unshift(data);
                     this.updateStats();
+                    updateDebugLastOp('Create Note', 'success', 'Saved to Supabase');
+                    document.getElementById('debugNotesCount').textContent = this.notes.length;
                     return data;
                 } catch (error) {
                     console.error('❌ Error creating note:', error);
