@@ -258,6 +258,134 @@
             resize: vertical;
         }
         
+        .file-upload-section {
+            border: 2px dashed #e1e5e9;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .file-upload-section:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .file-preview {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .file-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 200px;
+            position: relative;
+        }
+        
+        .file-item img {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        
+        .file-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .file-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #495057;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .file-size {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        
+        .file-remove {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .file-remove:hover {
+            background: #c82333;
+        }
+        
+        .attachment-display {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .attachment-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 200px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .attachment-item:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+        }
+        
+        .attachment-item img {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        
+        .attachment-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .attachment-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #495057;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .attachment-size {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        
         .modal-actions {
             display: flex;
             gap: 15px;
@@ -414,6 +542,17 @@
                 <div class="form-group">
                     <label class="form-label" for="noteContent">Content</label>
                     <textarea class="form-input form-textarea" id="noteContent" placeholder="Write your note content here..." required></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Attachments</label>
+                    <div class="file-upload-section">
+                        <input type="file" id="fileUpload" multiple accept="image/*,video/*,application/pdf,.doc,.docx,.txt,.zip,.rar" style="display: none;">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileUpload').click()">
+                            📎 Upload Files
+                        </button>
+                        <div id="filePreview" class="file-preview"></div>
+                    </div>
                 </div>
                 
                 <div class="modal-actions">
@@ -596,6 +735,7 @@
                 this.editingNoteId = null;
                 this.user = null;
                 this.isInitialized = false;
+                this.selectedFiles = []; // Store selected files for upload
                 
                 // Make app globally accessible
                 window.notesApp = this;
@@ -629,6 +769,11 @@
                 document.getElementById('noteForm').addEventListener('submit', (e) => {
                     e.preventDefault();
                     this.saveNote();
+                });
+                
+                // File upload
+                document.getElementById('fileUpload').addEventListener('change', (e) => {
+                    this.handleFileSelection(e.target.files);
                 });
                 
                 // Keyboard shortcuts
@@ -674,19 +819,21 @@
                 }
             }
             
-            async createNote(title, content) {
+            async createNote(title, content, attachments = []) {
                 try {
                     console.log('📝 Creating note with title:', title);
                     console.log('👤 User ID:', this.user.id);
                     console.log('🔗 Supabase URL:', SUPABASE_URL);
                     console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+                    console.log('📎 Attachments:', attachments);
                     
                     const noteData = {
                         title: title.trim(),
                         content: content.trim(),
                         user_id: this.user.id,
                         is_favorite: false,
-                        tags: []
+                        tags: [],
+                        attachments: attachments
                     };
                     
                     console.log('📊 Inserting data:', noteData);
@@ -714,16 +861,22 @@
                 }
             }
             
-            async updateNote(id, title, content) {
+            async updateNote(id, title, content, attachments = null) {
                 try {
                     console.log('✏️ Updating note:', id);
                     console.log('📝 New title:', title);
                     console.log('👤 User ID:', this.user.id);
+                    console.log('📎 Attachments:', attachments);
                     
                     const updateData = {
                         title: title.trim(),
                         content: content.trim()
                     };
+                    
+                    // Only update attachments if provided
+                    if (attachments !== null) {
+                        updateData.attachments = attachments;
+                    }
                     
                     console.log('📊 Update data:', updateData);
                     
@@ -761,6 +914,20 @@
                 try {
                     console.log('🗑️ Deleting note:', id);
                     console.log('👤 User ID:', this.user.id);
+                    
+                    // Find the note to get attachments
+                    const note = this.notes.find(note => note.id === id);
+                    if (note && note.attachments && note.attachments.length > 0) {
+                        console.log('📎 Deleting associated files:', note.attachments);
+                        for (const attachment of note.attachments) {
+                            try {
+                                await this.deleteFile(attachment.path);
+                            } catch (fileError) {
+                                console.error('❌ Error deleting file:', attachment.path, fileError);
+                                // Continue with note deletion even if file deletion fails
+                            }
+                        }
+                    }
                     
                     const { error } = await supabaseClient
                         .from('notes')
@@ -822,6 +989,19 @@
                             ${isUpdated ? ` • Updated: ${updatedDate}` : ''}
                         </div>
                         <div class="note-content">${this.escapeHtml(note.content)}</div>
+                        ${note.attachments && note.attachments.length > 0 ? `
+                            <div class="attachment-display">
+                                ${note.attachments.map(attachment => `
+                                    <div class="attachment-item" onclick="notesApp.downloadFile('${attachment.path}', '${attachment.name}')">
+                                        ${this.getFileIcon(attachment.type)}
+                                        <div class="attachment-info">
+                                            <div class="attachment-name">${this.escapeHtml(attachment.name)}</div>
+                                            <div class="attachment-size">${this.formatFileSize(attachment.size)}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
                         <div class="note-actions">
                             <button class="btn btn-small btn-primary" onclick="notesApp.editNote('${note.id}')">
                                 ✏️ Edit
@@ -840,12 +1020,166 @@
                 return div.innerHTML;
             }
             
+            getFileIcon(fileType) {
+                if (fileType.startsWith('image/')) {
+                    return '<img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iNCIgZmlsbD0iI0Y4RjlGQSIvPgo8cGF0aCBkPSJNMTIgMTZMMTYgMTJMMjAgMTZMMjggOEgzMlYzMkg4VjE2SDEyWiIgZmlsbD0iIzY2N0VBNiIvPgo8Y2lyY2xlIGN4PSIxNCIgY3k9IjE0IiByPSIyIiBmaWxsPSIjNjY3RUE2Ii8+Cjwvc3ZnPgo=" alt="Image" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;">';
+                } else if (fileType.startsWith('video/')) {
+                    return '<div style="width: 40px; height: 40px; background: #667eea; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">🎥</div>';
+                } else if (fileType === 'application/pdf') {
+                    return '<div style="width: 40px; height: 40px; background: #dc3545; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">📄</div>';
+                } else if (fileType.includes('word') || fileType.includes('document')) {
+                    return '<div style="width: 40px; height: 40px; background: #007bff; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">📝</div>';
+                } else if (fileType.includes('zip') || fileType.includes('rar')) {
+                    return '<div style="width: 40px; height: 40px; background: #28a745; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">📦</div>';
+                } else {
+                    return '<div style="width: 40px; height: 40px; background: #6c757d; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">📎</div>';
+                }
+            }
+            
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            async uploadFile(file) {
+                try {
+                    console.log('📎 Uploading file:', file.name);
+                    console.log('📊 File size:', file.size);
+                    console.log('📄 File type:', file.type);
+                    
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+                    const filePath = `notes/${this.user.id}/${fileName}`;
+                    
+                    console.log('📁 File path:', filePath);
+                    
+                    const { data, error } = await supabaseClient.storage
+                        .from('note-attachments')
+                        .upload(filePath, file);
+                    
+                    if (error) {
+                        console.error('❌ File upload error:', error);
+                        throw error;
+                    }
+                    
+                    console.log('✅ File uploaded successfully:', data);
+                    
+                    return {
+                        name: file.name,
+                        path: data.path,
+                        size: file.size,
+                        type: file.type,
+                        url: data.path
+                    };
+                } catch (error) {
+                    console.error('❌ Error uploading file:', error);
+                    throw error;
+                }
+            }
+            
+            async downloadFile(filePath, fileName) {
+                try {
+                    console.log('⬇️ Downloading file:', fileName);
+                    console.log('📁 File path:', filePath);
+                    
+                    const { data, error } = await supabaseClient.storage
+                        .from('note-attachments')
+                        .download(filePath);
+                    
+                    if (error) {
+                        console.error('❌ File download error:', error);
+                        throw error;
+                    }
+                    
+                    // Create download link
+                    const url = URL.createObjectURL(data);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileName;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                    
+                    console.log('✅ File downloaded successfully:', fileName);
+                } catch (error) {
+                    console.error('❌ Error downloading file:', error);
+                    alert('Failed to download file. Please try again.');
+                }
+            }
+            
+            async deleteFile(filePath) {
+                try {
+                    console.log('🗑️ Deleting file:', filePath);
+                    
+                    const { error } = await supabaseClient.storage
+                        .from('note-attachments')
+                        .remove([filePath]);
+                    
+                    if (error) {
+                        console.error('❌ File deletion error:', error);
+                        throw error;
+                    }
+                    
+                    console.log('✅ File deleted successfully:', filePath);
+                } catch (error) {
+                    console.error('❌ Error deleting file:', error);
+                    throw error;
+                }
+            }
+            
+            handleFileSelection(files) {
+                console.log('📎 Files selected:', files.length);
+                
+                // Add files to selected files array
+                Array.from(files).forEach(file => {
+                    this.selectedFiles.push(file);
+                });
+                
+                this.updateFilePreview();
+            }
+            
+            updateFilePreview() {
+                const preview = document.getElementById('filePreview');
+                preview.innerHTML = '';
+                
+                this.selectedFiles.forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    
+                    const isImage = file.type.startsWith('image/');
+                    const iconHtml = isImage ? 
+                        `<img src="${URL.createObjectURL(file)}" alt="${file.name}">` :
+                        this.getFileIcon(file.type);
+                    
+                    fileItem.innerHTML = `
+                        ${iconHtml}
+                        <div class="file-info">
+                            <div class="file-name">${this.escapeHtml(file.name)}</div>
+                            <div class="file-size">${this.formatFileSize(file.size)}</div>
+                        </div>
+                        <button class="file-remove" onclick="notesApp.removeFile(${index})">×</button>
+                    `;
+                    
+                    preview.appendChild(fileItem);
+                });
+            }
+            
+            removeFile(index) {
+                this.selectedFiles.splice(index, 1);
+                this.updateFilePreview();
+            }
+            
             openCreateModal() {
                 this.editingNoteId = null;
+                this.selectedFiles = []; // Reset selected files
                 document.getElementById('modalTitle').textContent = 'Create New Note';
                 document.getElementById('noteTitle').value = '';
                 document.getElementById('noteContent').value = '';
                 document.getElementById('saveBtn').textContent = 'Save Note';
+                document.getElementById('filePreview').innerHTML = '';
+                document.getElementById('fileUpload').value = '';
                 document.getElementById('noteModal').style.display = 'block';
                 document.getElementById('noteTitle').focus();
             }
@@ -854,10 +1188,13 @@
                 const note = this.notes.find(note => note.id === id);
                 if (note) {
                     this.editingNoteId = id;
+                    this.selectedFiles = []; // Reset selected files for editing
                     document.getElementById('modalTitle').textContent = 'Edit Note';
                     document.getElementById('noteTitle').value = note.title;
                     document.getElementById('noteContent').value = note.content;
                     document.getElementById('saveBtn').textContent = 'Update Note';
+                    document.getElementById('filePreview').innerHTML = '';
+                    document.getElementById('fileUpload').value = '';
                     document.getElementById('noteModal').style.display = 'block';
                     document.getElementById('noteTitle').focus();
                 }
@@ -872,14 +1209,34 @@
                     return;
                 }
                 
-                if (this.editingNoteId) {
-                    await this.updateNote(this.editingNoteId, title, content);
-                } else {
-                    await this.createNote(title, content);
+                try {
+                    // Upload files first if any are selected
+                    let attachments = [];
+                    if (this.selectedFiles.length > 0) {
+                        console.log('📎 Uploading files...');
+                        for (const file of this.selectedFiles) {
+                            const attachment = await this.uploadFile(file);
+                            attachments.push(attachment);
+                        }
+                        console.log('✅ Files uploaded:', attachments);
+                    }
+                    
+                    if (this.editingNoteId) {
+                        // For editing, merge with existing attachments
+                        const existingNote = this.notes.find(note => note.id === this.editingNoteId);
+                        const existingAttachments = existingNote.attachments || [];
+                        attachments = [...existingAttachments, ...attachments];
+                        await this.updateNote(this.editingNoteId, title, content, attachments);
+                    } else {
+                        await this.createNote(title, content, attachments);
+                    }
+                    
+                    this.closeModal();
+                    this.renderNotes();
+                } catch (error) {
+                    console.error('❌ Error saving note:', error);
+                    alert('Failed to save note. Please try again.');
                 }
-                
-                this.closeModal();
-                this.renderNotes();
             }
             
             async confirmDeleteNote(id) {
@@ -929,6 +1286,10 @@
         
         function clearAllNotes() {
             notesApp.clearAllNotes();
+        }
+        
+        function removeFile(index) {
+            notesApp.removeFile(index);
         }
     </script>
 </body>
