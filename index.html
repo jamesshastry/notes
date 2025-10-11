@@ -121,6 +121,29 @@
             box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
         }
         
+        .btn-premium {
+            background: linear-gradient(45deg, #ffd700, #ffed4e);
+            color: #333;
+            font-weight: 700;
+            border: 2px solid #ffd700;
+            animation: premiumGlow 2s ease-in-out infinite alternate;
+        }
+        
+        .btn-premium:hover {
+            transform: none;
+            box-shadow: none;
+            cursor: default;
+        }
+        
+        @keyframes premiumGlow {
+            0% {
+                box-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+            }
+            100% {
+                box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            }
+        }
+        
         .notes-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -666,6 +689,10 @@
                             name: result.user.displayName
                         };
                         window.notesApp.init();
+                        
+                        // Check and update premium status UI
+                        const isPremium = window.notesApp.isUserPremium();
+                        window.notesApp.updatePremiumUI(isPremium);
                     }
                 })
                 .catch((error) => {
@@ -1639,23 +1666,62 @@
                 try {
                     console.log('🔄 Updating user premium status:', isPremium);
                     
-                    // This would typically update a user profile table in Supabase
-                    // For now, we'll just log it and show a success message
-                    console.log('✅ User premium status updated:', {
+                    // Store premium status in localStorage for this user
+                    const premiumData = {
                         user_id: this.user.id,
                         is_premium: isPremium,
                         updated_at: new Date().toISOString()
-                    });
+                    };
                     
-                    // You could store this in localStorage for demo purposes
-                    localStorage.setItem('user_premium_status', JSON.stringify({
-                        user_id: this.user.id,
-                        is_premium: isPremium,
-                        updated_at: new Date().toISOString()
-                    }));
+                    localStorage.setItem('user_premium_status', JSON.stringify(premiumData));
+                    
+                    // Update the UI to reflect premium status
+                    this.updatePremiumUI(isPremium);
+                    
+                    console.log('✅ User premium status updated:', premiumData);
                     
                 } catch (error) {
                     console.error('❌ Error updating premium status:', error);
+                }
+            }
+            
+            // Check if user has premium status
+            isUserPremium() {
+                try {
+                    const premiumData = localStorage.getItem('user_premium_status');
+                    if (!premiumData) return false;
+                    
+                    const data = JSON.parse(premiumData);
+                    return data.user_id === this.user.id && data.is_premium === true;
+                } catch (error) {
+                    console.error('❌ Error checking premium status:', error);
+                    return false;
+                }
+            }
+            
+            // Update UI to show premium status instead of upgrade button
+            updatePremiumUI(isPremium) {
+                const upgradeButton = document.querySelector('button[onclick="initiatePayment()"]');
+                if (!upgradeButton) return;
+                
+                if (isPremium) {
+                    // Replace upgrade button with premium status indicator
+                    upgradeButton.innerHTML = '⭐ Premium User';
+                    upgradeButton.className = 'btn btn-premium';
+                    upgradeButton.onclick = null;
+                    upgradeButton.style.background = 'linear-gradient(45deg, #ffd700, #ffed4e)';
+                    upgradeButton.style.color = '#333';
+                    upgradeButton.style.cursor = 'default';
+                    upgradeButton.title = 'You are a premium user!';
+                } else {
+                    // Restore upgrade button
+                    upgradeButton.innerHTML = '💳 Upgrade to Premium';
+                    upgradeButton.className = 'btn btn-success';
+                    upgradeButton.onclick = initiatePayment;
+                    upgradeButton.style.background = '';
+                    upgradeButton.style.color = '';
+                    upgradeButton.style.cursor = 'pointer';
+                    upgradeButton.title = 'Upgrade to premium features';
                 }
             }
         }
