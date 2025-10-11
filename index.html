@@ -1616,12 +1616,15 @@
                     console.error('❌ Error stack:', error.stack);
                     console.error('❌ Error name:', error.name);
                     console.error('❌ Error message:', error.message);
+                    console.error('❌ Full error object:', JSON.stringify(error, null, 2));
                     
                     // Show more specific error message
                     let errorMessage = 'Failed to initiate payment. ';
+                    let debugInfo = '';
                     
                     if (error.message.includes('environment variable not set') || error.message.includes('not properly configured')) {
                         errorMessage += 'Please configure DODO_API_KEY and DODO_PRODUCT_KEY in Render environment variables.';
+                        debugInfo = '\n\nDebug Info:\n- Check if environment variables are set in Render\n- Verify the server is injecting them properly\n- Check Render logs for environment variable status';
                         console.log('💡 To fix this:');
                         console.log('1. Go to Render dashboard');
                         console.log('2. Add environment variables:');
@@ -1632,11 +1635,17 @@
                         errorMessage += 'Please allow popups for this site and try again.';
                     } else if (error.message.includes('API error')) {
                         errorMessage += 'There was an issue with the payment service. Please try again later.';
+                        debugInfo = '\n\nDebug Info:\n- Check if Dodo Payments API is accessible\n- Verify API key is valid\n- Check network connectivity';
+                    } else if (error.message.includes('fetch')) {
+                        errorMessage += 'Network error occurred. Please check your internet connection.';
+                        debugInfo = '\n\nDebug Info:\n- Check internet connection\n- Verify API endpoint is accessible\n- Check for CORS issues';
                     } else {
                         errorMessage += 'Please try again.';
+                        debugInfo = '\n\nDebug Info:\n- Check browser console for detailed error logs\n- Verify all environment variables are set\n- Check Render deployment logs';
                     }
                     
-                    alert(errorMessage);
+                    console.log('🔍 Debug Information:', debugInfo);
+                    alert(errorMessage + debugInfo);
                 }
             }
             
@@ -1744,6 +1753,37 @@
                 console.error('❌ User not authenticated');
                 alert('Please sign in to make a payment.');
             }
+        }
+        
+        // Debug function to test environment variables
+        function testEnvironmentVariables() {
+            console.log('🧪 Testing environment variables...');
+            const apiKey = 'YOUR_DODO_API_KEY';
+            const productKey = 'YOUR_DODO_PRODUCT_KEY';
+            
+            console.log('🔑 API Key:', apiKey);
+            console.log('📦 Product Key:', productKey);
+            console.log('🔑 API Key is placeholder:', apiKey === 'YOUR_DODO_API_KEY');
+            console.log('📦 Product Key is placeholder:', productKey === 'YOUR_DODO_PRODUCT_KEY');
+            
+            if (apiKey === 'YOUR_DODO_API_KEY') {
+                console.error('❌ API Key is still placeholder - environment variable not injected');
+            } else {
+                console.log('✅ API Key appears to be injected');
+            }
+            
+            if (productKey === 'YOUR_DODO_PRODUCT_KEY') {
+                console.error('❌ Product Key is still placeholder - environment variable not injected');
+            } else {
+                console.log('✅ Product Key appears to be injected');
+            }
+            
+            return {
+                apiKey: apiKey,
+                productKey: productKey,
+                apiKeyInjected: apiKey !== 'YOUR_DODO_API_KEY',
+                productKeyInjected: productKey !== 'YOUR_DODO_PRODUCT_KEY'
+            };
         }
     </script>
 </body>
