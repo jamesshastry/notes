@@ -203,6 +203,18 @@ app.post('/api/create-checkout', async (req, res) => {
 });
 
 // Webhook endpoint for Dodo Payments subscription updates
+// GET route for testing/debugging
+app.get('/api/payments/webhook', (req, res) => {
+    res.json({
+        success: true,
+        message: 'Webhook endpoint is active',
+        method: 'GET',
+        timestamp: new Date().toISOString(),
+        instructions: 'This endpoint accepts POST requests from Dodo Payments webhooks'
+    });
+});
+
+// POST route for actual webhook processing
 app.post('/api/payments/webhook', async (req, res) => {
     try {
         console.log('🔔 Payment webhook received');
@@ -348,6 +360,51 @@ app.post('/api/payments/webhook', async (req, res) => {
             success: false,
             error: error.message,
             details: 'Failed to process webhook'
+        });
+    }
+});
+
+// Endpoint to check subscription status for a user (for testing)
+app.get('/api/subscription-status/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        console.log('🔍 Checking subscription status for user:', userId);
+        
+        const { createClient } = require('@supabase/supabase-js');
+        const supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_ANON_KEY
+        );
+        
+        // Get subscription status
+        const { data: subscription, error } = await supabase
+            .from('subscription_status')
+            .select('*')
+            .eq('user_id', userId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .single();
+        
+        if (error && error.code !== 'PGRST116') {
+            console.error('❌ Error checking subscription:', error);
+            return res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+        
+        res.json({
+            success: true,
+            user_id: userId,
+            subscription: subscription || null,
+            is_premium: subscription ? subscription.status : false
+        });
+        
+    } catch (error) {
+        console.error('❌ Error in subscription status check:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
