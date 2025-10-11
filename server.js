@@ -128,8 +128,8 @@ app.post('/api/create-checkout', async (req, res) => {
             // Pre-fill customer information to reduce checkout friction
             customer: {
                 email: userEmail,
-                name: userName || 'Notes App User',
-                phone_number: '+1234567890'
+                name: userName || 'Notes App User'
+                // phone_number removed - let user enter it during checkout
             },
             
             // Billing address for tax calculation and compliance
