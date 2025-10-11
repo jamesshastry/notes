@@ -21,6 +21,8 @@ const injectEnvVars = (req, res, next) => {
         console.log('FIREBASE_APP_ID:', process.env.FIREBASE_APP_ID || 'NOT SET');
         console.log('SUPABASE_URL:', process.env.SUPABASE_URL || 'NOT SET');
         console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+        console.log('DODO_API_KEY:', process.env.DODO_API_KEY ? 'SET' : 'NOT SET');
+        console.log('DODO_WEBHOOK_SECRET:', process.env.DODO_WEBHOOK_SECRET ? 'SET' : 'NOT SET');
         
         // Replace Firebase configuration placeholders
         html = html.replace(
@@ -62,6 +64,12 @@ const injectEnvVars = (req, res, next) => {
         html = html.replace(
             'your-anon-key-here',
             process.env.SUPABASE_ANON_KEY || 'your-anon-key-here'
+        );
+        
+        // Replace Dodo Payments configuration placeholders
+        html = html.replace(
+            'YOUR_DODO_API_KEY',
+            process.env.DODO_API_KEY || 'YOUR_DODO_API_KEY'
         );
         
         res.send(html);
