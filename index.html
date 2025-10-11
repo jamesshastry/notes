@@ -789,7 +789,6 @@
                 this.currentFilter = 'all';
                 this.editingNoteId = null;
                 this.user = null;
-                this.useLocalStorage = false;
                 this.init();
                 
                 // Make app globally accessible for debug
@@ -869,17 +868,7 @@
             async loadNotes() {
                 try {
                     console.log('📚 Loading notes for user:', this.user.id);
-                    
-                    // Check if Supabase is properly configured
-                    if (!SUPABASE_URL || SUPABASE_URL.includes('your-project-id')) {
-                        console.warn('⚠️ Supabase not configured, using localStorage fallback');
-                        this.useLocalStorage = true;
-                        this.loadNotesFromLocalStorage();
-                        this.updateStatusIndicator();
-                        document.getElementById('debugStorage').innerHTML = `<span class="debug-status warning">localStorage</span>`;
-                        addDebugLog('Storage', 'warning', 'Using localStorage fallback');
-                        return;
-                    }
+                    addDebugStep('Load Notes', 'info', `Loading notes for user: ${this.user.id}`);
                     
                     const { data, error } = await supabaseClient
                         .from('notes')
@@ -889,29 +878,22 @@
                     
                     if (error) {
                         console.error('❌ Supabase error:', error);
-                        console.log('🔄 Falling back to localStorage');
-                        this.useLocalStorage = true;
-                        this.loadNotesFromLocalStorage();
-                        this.updateStatusIndicator();
-                        return;
+                        addDebugStep('Load Notes', 'error', `Failed: ${error.message}`);
+                        throw error;
                     }
                     
                     this.notes = data || [];
                     console.log('✅ Notes loaded from Supabase:', this.notes.length);
+                    addDebugStep('Load Notes', 'success', `Loaded ${this.notes.length} notes from Supabase`);
+                    document.getElementById('debugStorage').innerHTML = `<span class="debug-status success">Supabase</span>`;
                 } catch (error) {
                     console.error('❌ Error loading notes:', error);
-                    console.log('🔄 Falling back to localStorage');
-                    this.useLocalStorage = true;
-                    this.loadNotesFromLocalStorage();
-                    this.updateStatusIndicator();
+                    addDebugStep('Load Notes', 'error', `Error: ${error.message}`);
+                    this.notes = [];
+                    alert('Failed to load notes from Supabase. Please check your configuration.');
                 }
             }
             
-            loadNotesFromLocalStorage() {
-                const saved = localStorage.getItem('smartNotes');
-                this.notes = saved ? JSON.parse(saved) : [];
-                console.log('📱 Notes loaded from localStorage:', this.notes.length);
-            }
             
             async saveNotes() {
                 // This method is now handled by individual CRUD operations
@@ -928,14 +910,7 @@
                     addDebugStep('Create Note', 'info', `Starting note creation: "${title}"`);
                     addDebugStep('Create Note', 'info', `User ID: ${this.user.id}`);
                     
-                    // Check if we should use localStorage fallback
-                    if (this.useLocalStorage || !SUPABASE_URL || SUPABASE_URL.includes('your-project-id')) {
-                        console.log('📱 Creating note in localStorage (fallback mode)');
-                        const result = this.createNoteInLocalStorage(title, content);
-                        updateDebugLastOp('Create Note', 'warning', 'Saved to localStorage');
-                        document.getElementById('debugNotesCount').textContent = this.notes.length;
-                        return result;
-                    }
+                    // Supabase-only mode - no localStorage fallback
                     
                     console.log('🗄️ Creating note in Supabase');
                     console.log('📊 Inserting data:', {
@@ -963,13 +938,9 @@
                     if (error) {
                         console.error('❌ Supabase error:', error);
                         console.error('❌ Error details:', JSON.stringify(error, null, 2));
-                        console.log('🔄 Falling back to localStorage');
-                        this.useLocalStorage = true;
-                        this.updateStatusIndicator();
-                        updateDebugLastOp('Create Note', 'error', 'Supabase failed, using localStorage');
-                        const result = this.createNoteInLocalStorage(title, content);
-                        document.getElementById('debugNotesCount').textContent = this.notes.length;
-                        return result;
+                        addDebugStep('Create Note', 'error', `Supabase insert failed: ${error.message}`);
+                        updateDebugLastOp('Create Note', 'error', `Failed: ${error.message}`);
+                        throw error;
                     }
                     
                     console.log('✅ Note created successfully in Supabase:', data);
@@ -981,36 +952,17 @@
                 } catch (error) {
                     console.error('❌ Error creating note:', error);
                     console.error('❌ Error stack:', error.stack);
-                    console.log('🔄 Falling back to localStorage');
-                    this.useLocalStorage = true;
-                    this.updateStatusIndicator();
-                    return this.createNoteInLocalStorage(title, content);
+                    addDebugStep('Create Note', 'error', `Error: ${error.message}`);
+                    updateDebugLastOp('Create Note', 'error', `Error: ${error.message}`);
+                    alert('Failed to create note in Supabase. Please check your configuration.');
+                    throw error;
                 }
             }
             
-            createNoteInLocalStorage(title, content) {
-                const note = {
-                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-                    title: title.trim(),
-                    content: content.trim(),
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                    is_favorite: false,
-                    tags: []
-                };
-                
-                this.notes.unshift(note);
-                localStorage.setItem('smartNotes', JSON.stringify(this.notes));
-                this.updateStats();
-                console.log('✅ Note created in localStorage');
-                return note;
-            }
             
             async updateNote(id, title, content) {
                 try {
-                    if (this.useLocalStorage) {
-                        return this.updateNoteInLocalStorage(id, title, content);
-                    }
+                    addDebugStep('Update Note', 'info', `Updating note: ${id}`);
                     
                     const { data, error } = await supabaseClient
                         .from('notes')
@@ -1023,7 +975,10 @@
                         .select()
                         .single();
                     
-                    if (error) throw error;
+                    if (error) {
+                        addDebugStep('Update Note', 'error', `Failed: ${error.message}`);
+                        throw error;
+                    }
                     
                     const noteIndex = this.notes.findIndex(note => note.id === id);
                     if (noteIndex !== -1) {
@@ -1031,33 +986,20 @@
                     }
                     
                     this.updateStats();
+                    addDebugStep('Update Note', 'success', 'Note updated in Supabase');
                     return data;
                 } catch (error) {
                     console.error('Error updating note:', error);
-                    this.useLocalStorage = true;
-                    return this.updateNoteInLocalStorage(id, title, content);
+                    addDebugStep('Update Note', 'error', `Error: ${error.message}`);
+                    alert('Failed to update note in Supabase. Please check your configuration.');
+                    throw error;
                 }
             }
             
-            updateNoteInLocalStorage(id, title, content) {
-                const noteIndex = this.notes.findIndex(note => note.id === id);
-                if (noteIndex !== -1) {
-                    this.notes[noteIndex].title = title.trim();
-                    this.notes[noteIndex].content = content.trim();
-                    this.notes[noteIndex].updated_at = new Date().toISOString();
-                    localStorage.setItem('smartNotes', JSON.stringify(this.notes));
-                    this.updateStats();
-                    return this.notes[noteIndex];
-                }
-                return null;
-            }
             
             async deleteNote(id) {
                 try {
-                    if (this.useLocalStorage) {
-                        this.deleteNoteInLocalStorage(id);
-                        return;
-                    }
+                    addDebugStep('Delete Note', 'info', `Deleting note: ${id}`);
                     
                     const { error } = await supabaseClient
                         .from('notes')
@@ -1065,27 +1007,29 @@
                         .eq('id', id)
                         .eq('user_id', this.user.id);
                     
-                    if (error) throw error;
+                    if (error) {
+                        addDebugStep('Delete Note', 'error', `Failed: ${error.message}`);
+                        throw error;
+                    }
                     
                     this.notes = this.notes.filter(note => note.id !== id);
                     this.updateStats();
+                    addDebugStep('Delete Note', 'success', 'Note deleted from Supabase');
                 } catch (error) {
                     console.error('Error deleting note:', error);
-                    this.useLocalStorage = true;
-                    this.deleteNoteInLocalStorage(id);
+                    addDebugStep('Delete Note', 'error', `Error: ${error.message}`);
+                    alert('Failed to delete note from Supabase. Please check your configuration.');
+                    throw error;
                 }
             }
             
-            deleteNoteInLocalStorage(id) {
-                this.notes = this.notes.filter(note => note.id !== id);
-                localStorage.setItem('smartNotes', JSON.stringify(this.notes));
-                this.updateStats();
-            }
             
             async toggleFavorite(id) {
                 try {
                     const note = this.notes.find(note => note.id === id);
                     if (!note) return;
+                    
+                    addDebugStep('Toggle Favorite', 'info', `Toggling favorite for note: ${id}`);
                     
                     const { data, error } = await supabaseClient
                         .from('notes')
@@ -1095,7 +1039,10 @@
                         .select()
                         .single();
                     
-                    if (error) throw error;
+                    if (error) {
+                        addDebugStep('Toggle Favorite', 'error', `Failed: ${error.message}`);
+                        throw error;
+                    }
                     
                     const noteIndex = this.notes.findIndex(note => note.id === id);
                     if (noteIndex !== -1) {
@@ -1103,9 +1050,12 @@
                     }
                     
                     this.updateStats();
+                    addDebugStep('Toggle Favorite', 'success', 'Favorite status updated in Supabase');
                 } catch (error) {
                     console.error('Error toggling favorite:', error);
-                    alert('Failed to update favorite status. Please try again.');
+                    addDebugStep('Toggle Favorite', 'error', `Error: ${error.message}`);
+                    alert('Failed to update favorite status in Supabase. Please check your configuration.');
+                    throw error;
                 }
             }
             
@@ -1214,13 +1164,8 @@
             
             updateStatusIndicator() {
                 const statusElement = document.getElementById('statusIndicator');
-                if (this.useLocalStorage) {
-                    statusElement.innerHTML = '📱 Using local storage (Supabase not configured)';
-                    statusElement.style.color = '#ffa500';
-                } else {
-                    statusElement.innerHTML = '🗄️ Connected to Supabase database';
-                    statusElement.style.color = '#51cf66';
-                }
+                statusElement.innerHTML = '🗄️ Connected to Supabase database';
+                statusElement.style.color = '#51cf66';
             }
             
             openCreateModal() {
