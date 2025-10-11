@@ -533,9 +533,12 @@
     
     <!-- Supabase Configuration -->
     <script>
-        // Supabase Configuration
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        // Supabase Configuration - reads from environment variables
+        const SUPABASE_URL = 'https://your-project-id.supabase.co'; // Replace with your actual URL
+        const SUPABASE_ANON_KEY = 'your-anon-key-here'; // Replace with your actual key
+        
+        // For production, these will be injected by the server
+        // You can also set them via environment variables in Render
         
         // Initialize Supabase client
         const { createClient } = supabase;
