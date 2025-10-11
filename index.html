@@ -755,6 +755,13 @@
                 this.renderNotes();
                 this.bindEvents();
                 
+                // Test storage connection
+                console.log('🧪 Testing storage connection...');
+                const storageConnected = await this.testStorageConnection();
+                if (!storageConnected) {
+                    console.warn('⚠️ Storage connection test failed - file operations may not work');
+                }
+                
                 this.isInitialized = true;
                 console.log('✅ NotesApp initialized successfully');
             }
@@ -919,15 +926,41 @@
                     // Find the note to get attachments
                     const note = this.notes.find(note => note.id === id);
                     if (note && note.attachments && note.attachments.length > 0) {
-                        console.log('📎 Deleting associated files:', note.attachments);
+                        console.log('📎 Found note with attachments:', note.attachments.length);
+                        console.log('📎 Attachment details:', note.attachments);
+                        
+                        let deletedFiles = 0;
+                        let failedFiles = 0;
+                        
                         for (const attachment of note.attachments) {
                             try {
-                                await this.deleteFile(attachment.path);
+                                console.log('🗑️ Attempting to delete attachment:', attachment);
+                                const success = await this.deleteFile(attachment.path);
+                                if (success) {
+                                    deletedFiles++;
+                                    console.log('✅ Successfully deleted file:', attachment.name);
+                                } else {
+                                    failedFiles++;
+                                    console.warn('⚠️ Failed to delete file:', attachment.name);
+                                }
                             } catch (fileError) {
+                                failedFiles++;
                                 console.error('❌ Error deleting file:', attachment.path, fileError);
                                 // Continue with note deletion even if file deletion fails
                             }
                         }
+                        
+                        console.log('📊 File deletion summary:', {
+                            total: note.attachments.length,
+                            deleted: deletedFiles,
+                            failed: failedFiles
+                        });
+                        
+                        if (failedFiles > 0) {
+                            console.warn(`⚠️ ${failedFiles} files failed to delete, but note deletion will continue`);
+                        }
+                    } else {
+                        console.log('📎 Note has no attachments to delete');
                     }
                     
                     const { error } = await supabaseClient
@@ -1134,23 +1167,74 @@
                 }
             }
             
+            async testStorageConnection() {
+                try {
+                    console.log('🧪 Testing Supabase Storage connection...');
+                    console.log('🔗 Supabase URL:', SUPABASE_URL);
+                    console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+                    
+                    // Test if we can access the storage bucket
+                    const { data, error } = await supabaseClient.storage
+                        .from('note-attachments')
+                        .list('', { limit: 1 });
+                    
+                    if (error) {
+                        console.error('❌ Storage connection test failed:', error);
+                        console.error('❌ Error details:', JSON.stringify(error, null, 2));
+                        
+                        if (error.message.includes('Bucket not found')) {
+                            console.error('❌ Storage bucket "note-attachments" does not exist!');
+                            console.error('❌ Please run the SQL scripts in SUPABASE_STORAGE_SETUP.md');
+                        }
+                        
+                        return false;
+                    }
+                    
+                    console.log('✅ Storage connection test successful:', data);
+                    return true;
+                } catch (error) {
+                    console.error('❌ Storage connection test error:', error);
+                    console.error('❌ Error stack:', error.stack);
+                    return false;
+                }
+            }
+            
             async deleteFile(filePath) {
                 try {
-                    console.log('🗑️ Deleting file:', filePath);
+                    console.log('🗑️ Deleting file from storage:', filePath);
+                    console.log('🔗 Supabase URL:', SUPABASE_URL);
+                    console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
                     
-                    const { error } = await supabaseClient.storage
+                    // Validate file path
+                    if (!filePath || typeof filePath !== 'string') {
+                        throw new Error(`Invalid file path: ${filePath}`);
+                    }
+                    
+                    console.log('📁 File path validation passed:', filePath);
+                    
+                    const { data, error } = await supabaseClient.storage
                         .from('note-attachments')
                         .remove([filePath]);
                     
+                    console.log('📊 Storage response:', { data, error });
+                    
                     if (error) {
                         console.error('❌ File deletion error:', error);
+                        console.error('❌ Error details:', JSON.stringify(error, null, 2));
                         throw error;
                     }
                     
-                    console.log('✅ File deleted successfully:', filePath);
+                    console.log('✅ File deleted successfully from storage:', filePath);
+                    console.log('📊 Deletion result:', data);
+                    return true;
                 } catch (error) {
                     console.error('❌ Error deleting file:', error);
-                    throw error;
+                    console.error('❌ Error stack:', error.stack);
+                    console.error('❌ File path that failed:', filePath);
+                    
+                    // Don't throw error - let note deletion continue
+                    console.warn('⚠️ File deletion failed, but continuing with note deletion');
+                    return false;
                 }
             }
             
