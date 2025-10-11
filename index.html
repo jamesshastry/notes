@@ -540,12 +540,33 @@
         const SUPABASE_URL = 'https://your-project-id.supabase.co'; // Replace with your actual URL
         const SUPABASE_ANON_KEY = 'your-anon-key-here'; // Replace with your actual key
         
-        // For production, these will be injected by the server
-        // You can also set them via environment variables in Render
+        // Debug logging
+        console.log('🔧 Client-side Supabase Configuration:');
+        console.log('🔗 SUPABASE_URL:', SUPABASE_URL);
+        console.log('🔑 SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+        console.log('🔑 Key length:', SUPABASE_ANON_KEY ? SUPABASE_ANON_KEY.length : 0);
+        
+        // Check if credentials are properly injected
+        const isConfigured = SUPABASE_URL && 
+                            !SUPABASE_URL.includes('your-project-id') && 
+                            SUPABASE_ANON_KEY && 
+                            !SUPABASE_ANON_KEY.includes('your-anon-key-here');
+        
+        console.log('✅ Supabase configured:', isConfigured);
         
         // Initialize Supabase client
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // Test connection
+        console.log('🧪 Testing Supabase connection...');
+        supabaseClient.from('notes').select('count').then(({ data, error }) => {
+            if (error) {
+                console.error('❌ Supabase connection test failed:', error);
+            } else {
+                console.log('✅ Supabase connection test successful:', data);
+            }
+        });
     </script>
     
     <script>
@@ -678,13 +699,26 @@
             
             async createNote(title, content) {
                 try {
+                    console.log('📝 Creating note with title:', title);
+                    console.log('👤 User ID:', this.user.id);
+                    console.log('🔧 Using localStorage:', this.useLocalStorage);
+                    console.log('🔗 Supabase URL:', SUPABASE_URL);
+                    
                     // Check if we should use localStorage fallback
                     if (this.useLocalStorage || !SUPABASE_URL || SUPABASE_URL.includes('your-project-id')) {
-                        console.log('📱 Creating note in localStorage');
+                        console.log('📱 Creating note in localStorage (fallback mode)');
                         return this.createNoteInLocalStorage(title, content);
                     }
                     
                     console.log('🗄️ Creating note in Supabase');
+                    console.log('📊 Inserting data:', {
+                        title: title.trim(),
+                        content: content.trim(),
+                        user_id: this.user.id,
+                        is_favorite: false,
+                        tags: []
+                    });
+                    
                     const { data, error } = await supabaseClient
                         .from('notes')
                         .insert([
@@ -701,19 +735,23 @@
                     
                     if (error) {
                         console.error('❌ Supabase error:', error);
+                        console.error('❌ Error details:', JSON.stringify(error, null, 2));
                         console.log('🔄 Falling back to localStorage');
                         this.useLocalStorage = true;
+                        this.updateStatusIndicator();
                         return this.createNoteInLocalStorage(title, content);
                     }
                     
+                    console.log('✅ Note created successfully in Supabase:', data);
                     this.notes.unshift(data);
                     this.updateStats();
-                    console.log('✅ Note created in Supabase');
                     return data;
                 } catch (error) {
                     console.error('❌ Error creating note:', error);
+                    console.error('❌ Error stack:', error.stack);
                     console.log('🔄 Falling back to localStorage');
                     this.useLocalStorage = true;
+                    this.updateStatusIndicator();
                     return this.createNoteInLocalStorage(title, content);
                 }
             }

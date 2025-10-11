@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 Supabase Debug Page</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .debug-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Supabase Debug Page</h1>
+    
+    <div class="debug-section">
+        <h2>📋 Environment Variables</h2>
+        <div id="envStatus"></div>
+    </div>
+    
+    <div class="debug-section">
+        <h2>🔗 Connection Test</h2>
+        <div id="connectionStatus"></div>
+        <button onclick="testConnection()">Test Connection</button>
+    </div>
+    
+    <div class="debug-section">
+        <h2>📊 Database Test</h2>
+        <div id="dbStatus"></div>
+        <button onclick="testDatabase()">Test Database</button>
+        <button onclick="createTestNote()">Create Test Note</button>
+    </div>
+    
+    <div class="debug-section">
+        <h2>📝 Recent Notes</h2>
+        <div id="notesList"></div>
+        <button onclick="loadNotes()">Load Notes</button>
+    </div>
+
+    <script>
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://your-project-id.supabase.co';
+        const SUPABASE_ANON_KEY = 'your-anon-key-here';
+        
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // Debug environment variables
+        function checkEnvironment() {
+            const envDiv = document.getElementById('envStatus');
+            
+            const isUrlSet = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id');
+            const isKeySet = SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('your-anon-key-here');
+            
+            envDiv.innerHTML = `
+                <div class="status ${isUrlSet ? 'success' : 'error'}">
+                    <strong>SUPABASE_URL:</strong> ${SUPABASE_URL}
+                    <br><small>Status: ${isUrlSet ? '✅ Set' : '❌ Not Set'}</small>
+                </div>
+                <div class="status ${isKeySet ? 'success' : 'error'}">
+                    <strong>SUPABASE_ANON_KEY:</strong> ${SUPABASE_ANON_KEY ? 'SET (' + SUPABASE_ANON_KEY.length + ' chars)' : 'NOT SET'}
+                    <br><small>Status: ${isKeySet ? '✅ Set' : '❌ Not Set'}</small>
+                </div>
+                <div class="status ${isUrlSet && isKeySet ? 'success' : 'warning'}">
+                    <strong>Overall Status:</strong> ${isUrlSet && isKeySet ? '✅ Ready for Supabase' : '⚠️ Using localStorage fallback'}
+                </div>
+            `;
+        }
+        
+        // Test connection
+        async function testConnection() {
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.innerHTML = '<div class="status info">🔄 Testing connection...</div>';
+            
+            try {
+                const { data, error } = await supabaseClient.from('notes').select('count');
+                
+                if (error) {
+                    statusDiv.innerHTML = `
+                        <div class="status error">
+                            ❌ Connection failed: ${error.message}
+                            <pre>${JSON.stringify(error, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    statusDiv.innerHTML = `
+                        <div class="status success">
+                            ✅ Connection successful!
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                statusDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ Connection error: ${err.message}
+                        <pre>${err.stack}</pre>
+                    </div>
+                `;
+            }
+        }
+        
+        // Test database operations
+        async function testDatabase() {
+            const statusDiv = document.getElementById('dbStatus');
+            statusDiv.innerHTML = '<div class="status info">🔄 Testing database...</div>';
+            
+            try {
+                // Test select
+                const { data: selectData, error: selectError } = await supabaseClient
+                    .from('notes')
+                    .select('*')
+                    .limit(5);
+                
+                if (selectError) {
+                    statusDiv.innerHTML = `
+                        <div class="status error">
+                            ❌ Select test failed: ${selectError.message}
+                            <pre>${JSON.stringify(selectError, null, 2)}</pre>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                statusDiv.innerHTML = `
+                    <div class="status success">
+                        ✅ Database test successful!
+                        <br><strong>Found ${selectData.length} notes</strong>
+                        <pre>${JSON.stringify(selectData, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (err) {
+                statusDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ Database test error: ${err.message}
+                        <pre>${err.stack}</pre>
+                    </div>
+                `;
+            }
+        }
+        
+        // Create test note
+        async function createTestNote() {
+            const statusDiv = document.getElementById('dbStatus');
+            statusDiv.innerHTML = '<div class="status info">🔄 Creating test note...</div>';
+            
+            try {
+                const testNote = {
+                    title: 'Debug Test Note',
+                    content: 'This is a test note created from the debug page',
+                    user_id: 'guest-user-id',
+                    is_favorite: false,
+                    tags: ['debug', 'test']
+                };
+                
+                console.log('Creating test note:', testNote);
+                
+                const { data, error } = await supabaseClient
+                    .from('notes')
+                    .insert([testNote])
+                    .select()
+                    .single();
+                
+                if (error) {
+                    statusDiv.innerHTML = `
+                        <div class="status error">
+                            ❌ Create test failed: ${error.message}
+                            <pre>${JSON.stringify(error, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    statusDiv.innerHTML = `
+                        <div class="status success">
+                            ✅ Test note created successfully!
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                statusDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ Create test error: ${err.message}
+                        <pre>${err.stack}</pre>
+                    </div>
+                `;
+            }
+        }
+        
+        // Load notes
+        async function loadNotes() {
+            const notesDiv = document.getElementById('notesList');
+            notesDiv.innerHTML = '<div class="status info">🔄 Loading notes...</div>';
+            
+            try {
+                const { data, error } = await supabaseClient
+                    .from('notes')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+                
+                if (error) {
+                    notesDiv.innerHTML = `
+                        <div class="status error">
+                            ❌ Load notes failed: ${error.message}
+                            <pre>${JSON.stringify(error, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    notesDiv.innerHTML = `
+                        <div class="status success">
+                            ✅ Loaded ${data.length} notes
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                notesDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ Load notes error: ${err.message}
+                        <pre>${err.stack}</pre>
+                    </div>
+                `;
+            }
+        }
+        
+        // Initialize
+        checkEnvironment();
+    </script>
+</body>
+</html>
