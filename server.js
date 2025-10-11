@@ -90,6 +90,111 @@ app.use(injectEnvVars);
 // Serve static files from the root directory
 app.use(express.static('.'));
 
+// Add JSON parsing middleware for POST requests
+app.use(express.json());
+
+// Payment endpoint to handle Dodo Payments API calls (server-side to avoid CORS)
+app.post('/api/create-checkout', async (req, res) => {
+    try {
+        console.log('💳 Server-side payment request received');
+        console.log('📊 Request body:', req.body);
+        
+        const { userEmail, userName, userId } = req.body;
+        
+        // Validate required environment variables
+        const apiKey = process.env.DODO_PAYMENTS_API_KEY;
+        const productId = process.env.DODO_PRODUCT_ID;
+        
+        if (!apiKey || apiKey === 'YOUR_DODO_PAYMENTS_API_KEY') {
+            throw new Error('DODO_PAYMENTS_API_KEY not configured');
+        }
+        
+        if (!productId || productId === 'YOUR_DODO_PRODUCT_ID') {
+            throw new Error('DODO_PRODUCT_ID not configured');
+        }
+        
+        console.log('✅ Environment variables validated');
+        
+        // Prepare payment data according to Dodo Payments API format
+        const paymentData = {
+            // Products to sell - use IDs from your Dodo Payments dashboard
+            product_cart: [
+                {
+                    product_id: productId,
+                    quantity: 1
+                }
+            ],
+            
+            // Pre-fill customer information to reduce checkout friction
+            customer: {
+                email: userEmail,
+                name: userName || 'Notes App User',
+                phone_number: '+1234567890'
+            },
+            
+            // Billing address for tax calculation and compliance
+            billing_address: {
+                street: '123 Main St',
+                city: 'San Francisco',
+                state: 'CA',
+                country: 'US', // Required: ISO 3166-1 alpha-2 country code
+                zipcode: '94102'
+            },
+            
+            // Where to redirect after successful payment
+            return_url: `${req.protocol}://${req.get('host')}?payment=success`,
+            
+            // Custom data for your internal tracking
+            metadata: {
+                user_id: userId,
+                user_email: userEmail,
+                app_name: 'Notes App',
+                subscription_type: 'premium'
+            }
+        };
+        
+        console.log('📊 Payment data prepared:', paymentData);
+        console.log('🌐 Making API request to Dodo Payments...');
+        
+        // Make the API call to Dodo Payments
+        const response = await fetch('https://test.dodopayments.com/checkouts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(paymentData)
+        });
+        
+        console.log('📡 Dodo Payments API response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Dodo Payments API error:', errorText);
+            throw new Error(`Dodo Payments API error: ${response.status} ${response.statusText}. Details: ${errorText}`);
+        }
+        
+        const checkoutData = await response.json();
+        console.log('✅ Checkout session created:', checkoutData);
+        
+        // Return the checkout data to the client
+        res.json({
+            success: true,
+            checkout_url: checkoutData.checkout_url,
+            session_id: checkoutData.session_id,
+            data: checkoutData
+        });
+        
+    } catch (error) {
+        console.error('❌ Server-side payment error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            details: 'Failed to create checkout session'
+        });
+    }
+});
+
 // Serve the main HTML file for all other routes (SPA behavior)
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));

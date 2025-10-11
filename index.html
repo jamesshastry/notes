@@ -1515,92 +1515,27 @@
                     console.log('👤 User ID:', this.user.id);
                     console.log('👤 User Email:', this.user.email);
                     
-                    // Check if environment variables are properly set
-                    const apiKey = 'YOUR_DODO_PAYMENTS_API_KEY';
-                    const productId = 'YOUR_DODO_PRODUCT_ID';
+                    // Call our server endpoint instead of Dodo Payments API directly (avoids CORS)
+                    console.log('🌐 Calling server endpoint: /api/create-checkout');
                     
-                    console.log('🔧 Environment check:');
-                    console.log('🔑 API Key value:', apiKey);
-                    console.log('🔑 API Key length:', apiKey.length);
-                    console.log('📦 Product ID value:', productId);
-                    console.log('📦 Product ID length:', productId.length);
-                    console.log('🔑 API Key is placeholder:', apiKey === 'YOUR_DODO_PAYMENTS_API_KEY');
-                    console.log('📦 Product ID is placeholder:', productId === 'YOUR_DODO_PRODUCT_ID');
-                    
-                    // More robust check - if the values are still placeholders or empty
-                    if (!apiKey || apiKey === 'YOUR_DODO_PAYMENTS_API_KEY' || apiKey.length < 10) {
-                        console.error('❌ API Key validation failed:', { apiKey, length: apiKey.length });
-                        throw new Error('DODO_PAYMENTS_API_KEY environment variable not properly configured in Render. Please check your environment variables.');
-                    }
-                    
-                    if (!productId || productId === 'YOUR_DODO_PRODUCT_ID' || productId.length < 5) {
-                        console.error('❌ Product ID validation failed:', { productId, length: productId.length });
-                        throw new Error('DODO_PRODUCT_ID environment variable not properly configured in Render. Please check your environment variables.');
-                    }
-                    
-                    console.log('✅ Environment variables validated successfully');
-                    
-                    // Prepare payment data according to Dodo Payments API format
-                    const paymentData = {
-                        // Products to sell - use IDs from your Dodo Payments dashboard
-                        product_cart: [
-                            {
-                                product_id: productId,
-                                quantity: 1
-                            }
-                        ],
-                        
-                        // Pre-fill customer information to reduce checkout friction
-                        customer: {
-                            email: this.user.email,
-                            name: this.user.name || 'Notes App User',
-                            phone_number: '+1234567890' // You might want to collect this from user
-                        },
-                        
-                        // Billing address for tax calculation and compliance
-                        billing_address: {
-                            street: '123 Main St',
-                            city: 'San Francisco',
-                            state: 'CA',
-                            country: 'US', // Required: ISO 3166-1 alpha-2 country code
-                            zipcode: '94102'
-                        },
-                        
-                        // Where to redirect after successful payment
-                        return_url: window.location.href + '?payment=success',
-                        
-                        // Custom data for your internal tracking
-                        metadata: {
-                            user_id: this.user.id,
-                            user_email: this.user.email,
-                            app_name: 'Notes App',
-                            subscription_type: 'premium'
-                        }
-                    };
-                    
-                    console.log('📊 Payment data:', paymentData);
-                    console.log('🌐 Making API request to:', 'https://test.dodopayments.com/checkouts');
-                    
-                    // Call Dodo Payments checkout API
-                    console.log('🧪 Calling Dodo Payments API...');
-                    
-                    // Create checkout session with Dodo Payments
-                    const response = await fetch('https://test.dodopayments.com/checkouts', {
+                    const response = await fetch('/api/create-checkout', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`,
                         },
-                        body: JSON.stringify(paymentData)
+                        body: JSON.stringify({
+                            userEmail: this.user.email,
+                            userName: this.user.name,
+                            userId: this.user.id
+                        })
                     });
                     
-                    console.log('📡 API Response status:', response.status);
-                    console.log('📡 API Response headers:', Object.fromEntries(response.headers.entries()));
+                    console.log('📡 Server response status:', response.status);
                     
                     if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('❌ API Error Response:', errorText);
-                        throw new Error(`Payment API error: ${response.status} ${response.statusText}. Details: ${errorText}`);
+                        const errorData = await response.json();
+                        console.error('❌ Server error:', errorData);
+                        throw new Error(`Server error: ${errorData.error || response.statusText}`);
                     }
                     
                     const checkoutData = await response.json();
@@ -1628,7 +1563,7 @@
                         }, 1000);
                         
                     } else {
-                        throw new Error('No checkout URL received from Dodo Payments');
+                        throw new Error('No checkout URL received from server');
                     }
                     
                 } catch (error) {
@@ -1642,7 +1577,7 @@
                     let errorMessage = 'Failed to initiate payment. ';
                     let debugInfo = '';
                     
-                    if (error.message.includes('environment variable not set') || error.message.includes('not properly configured')) {
+                    if (error.message.includes('not configured')) {
                         errorMessage += 'Please configure DODO_PAYMENTS_API_KEY and DODO_PRODUCT_ID in Render environment variables.';
                         debugInfo = '\n\nDebug Info:\n- Check if environment variables are set in Render\n- Verify the server is injecting them properly\n- Check Render logs for environment variable status';
                         console.log('💡 To fix this:');
@@ -1653,12 +1588,12 @@
                         console.log('3. Redeploy the app');
                     } else if (error.message.includes('popups are blocked')) {
                         errorMessage += 'Please allow popups for this site and try again.';
-                    } else if (error.message.includes('API error')) {
+                    } else if (error.message.includes('Server error')) {
                         errorMessage += 'There was an issue with the payment service. Please try again later.';
-                        debugInfo = '\n\nDebug Info:\n- Check if Dodo Payments API is accessible\n- Verify API key is valid\n- Check network connectivity';
+                        debugInfo = '\n\nDebug Info:\n- Check server logs for detailed error information\n- Verify API key and product ID are correct\n- Check Dodo Payments API status';
                     } else if (error.message.includes('fetch')) {
                         errorMessage += 'Network error occurred. Please check your internet connection.';
-                        debugInfo = '\n\nDebug Info:\n- Check internet connection\n- Verify API endpoint is accessible\n- Check for CORS issues';
+                        debugInfo = '\n\nDebug Info:\n- Check internet connection\n- Verify server is running\n- Check for server-side errors';
                     } else {
                         errorMessage += 'Please try again.';
                         debugInfo = '\n\nDebug Info:\n- Check browser console for detailed error logs\n- Verify all environment variables are set\n- Check Render deployment logs';
