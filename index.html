@@ -1516,40 +1516,60 @@
                     console.log('👤 User Email:', this.user.email);
                     
                     // Check if environment variables are properly set
-                    const apiKey = 'YOUR_DODO_API_KEY';
-                    const productKey = 'YOUR_DODO_PRODUCT_KEY';
+                    const apiKey = 'YOUR_DODO_PAYMENTS_API_KEY';
+                    const productId = 'YOUR_DODO_PRODUCT_ID';
                     
                     console.log('🔧 Environment check:');
                     console.log('🔑 API Key value:', apiKey);
                     console.log('🔑 API Key length:', apiKey.length);
-                    console.log('📦 Product Key value:', productKey);
-                    console.log('📦 Product Key length:', productKey.length);
-                    console.log('🔑 API Key is placeholder:', apiKey === 'YOUR_DODO_API_KEY');
-                    console.log('📦 Product Key is placeholder:', productKey === 'YOUR_DODO_PRODUCT_KEY');
+                    console.log('📦 Product ID value:', productId);
+                    console.log('📦 Product ID length:', productId.length);
+                    console.log('🔑 API Key is placeholder:', apiKey === 'YOUR_DODO_PAYMENTS_API_KEY');
+                    console.log('📦 Product ID is placeholder:', productId === 'YOUR_DODO_PRODUCT_ID');
                     
                     // More robust check - if the values are still placeholders or empty
-                    if (!apiKey || apiKey === 'YOUR_DODO_API_KEY' || apiKey.length < 10) {
+                    if (!apiKey || apiKey === 'YOUR_DODO_PAYMENTS_API_KEY' || apiKey.length < 10) {
                         console.error('❌ API Key validation failed:', { apiKey, length: apiKey.length });
-                        throw new Error('DODO_API_KEY environment variable not properly configured in Render. Please check your environment variables.');
+                        throw new Error('DODO_PAYMENTS_API_KEY environment variable not properly configured in Render. Please check your environment variables.');
                     }
                     
-                    if (!productKey || productKey === 'YOUR_DODO_PRODUCT_KEY' || productKey.length < 5) {
-                        console.error('❌ Product Key validation failed:', { productKey, length: productKey.length });
-                        throw new Error('DODO_PRODUCT_KEY environment variable not properly configured in Render. Please check your environment variables.');
+                    if (!productId || productId === 'YOUR_DODO_PRODUCT_ID' || productId.length < 5) {
+                        console.error('❌ Product ID validation failed:', { productId, length: productId.length });
+                        throw new Error('DODO_PRODUCT_ID environment variable not properly configured in Render. Please check your environment variables.');
                     }
                     
                     console.log('✅ Environment variables validated successfully');
                     
-                    // Prepare payment data
+                    // Prepare payment data according to Dodo Payments API format
                     const paymentData = {
-                        product_key: productKey,
-                        amount: 999, // $9.99 in cents
-                        currency: 'USD',
-                        description: 'Premium Notes App Subscription',
-                        customer_email: this.user.email,
-                        customer_id: this.user.id,
-                        success_url: window.location.href + '?payment=success',
-                        cancel_url: window.location.href + '?payment=cancelled',
+                        // Products to sell - use IDs from your Dodo Payments dashboard
+                        product_cart: [
+                            {
+                                product_id: productId,
+                                quantity: 1
+                            }
+                        ],
+                        
+                        // Pre-fill customer information to reduce checkout friction
+                        customer: {
+                            email: this.user.email,
+                            name: this.user.name || 'Notes App User',
+                            phone_number: '+1234567890' // You might want to collect this from user
+                        },
+                        
+                        // Billing address for tax calculation and compliance
+                        billing_address: {
+                            street: '123 Main St',
+                            city: 'San Francisco',
+                            state: 'CA',
+                            country: 'US', // Required: ISO 3166-1 alpha-2 country code
+                            zipcode: '94102'
+                        },
+                        
+                        // Where to redirect after successful payment
+                        return_url: window.location.href + '?payment=success',
+                        
+                        // Custom data for your internal tracking
                         metadata: {
                             user_id: this.user.id,
                             user_email: this.user.email,
@@ -1623,13 +1643,13 @@
                     let debugInfo = '';
                     
                     if (error.message.includes('environment variable not set') || error.message.includes('not properly configured')) {
-                        errorMessage += 'Please configure DODO_API_KEY and DODO_PRODUCT_KEY in Render environment variables.';
+                        errorMessage += 'Please configure DODO_PAYMENTS_API_KEY and DODO_PRODUCT_ID in Render environment variables.';
                         debugInfo = '\n\nDebug Info:\n- Check if environment variables are set in Render\n- Verify the server is injecting them properly\n- Check Render logs for environment variable status';
                         console.log('💡 To fix this:');
                         console.log('1. Go to Render dashboard');
                         console.log('2. Add environment variables:');
-                        console.log('   DODO_API_KEY=your_actual_api_key');
-                        console.log('   DODO_PRODUCT_KEY=your_actual_product_key');
+                        console.log('   DODO_PAYMENTS_API_KEY=your_actual_api_key');
+                        console.log('   DODO_PRODUCT_ID=your_actual_product_id');
                         console.log('3. Redeploy the app');
                     } else if (error.message.includes('popups are blocked')) {
                         errorMessage += 'Please allow popups for this site and try again.';
@@ -1758,31 +1778,31 @@
         // Debug function to test environment variables
         function testEnvironmentVariables() {
             console.log('🧪 Testing environment variables...');
-            const apiKey = 'YOUR_DODO_API_KEY';
-            const productKey = 'YOUR_DODO_PRODUCT_KEY';
+            const apiKey = 'YOUR_DODO_PAYMENTS_API_KEY';
+            const productId = 'YOUR_DODO_PRODUCT_ID';
             
             console.log('🔑 API Key:', apiKey);
-            console.log('📦 Product Key:', productKey);
-            console.log('🔑 API Key is placeholder:', apiKey === 'YOUR_DODO_API_KEY');
-            console.log('📦 Product Key is placeholder:', productKey === 'YOUR_DODO_PRODUCT_KEY');
+            console.log('📦 Product ID:', productId);
+            console.log('🔑 API Key is placeholder:', apiKey === 'YOUR_DODO_PAYMENTS_API_KEY');
+            console.log('📦 Product ID is placeholder:', productId === 'YOUR_DODO_PRODUCT_ID');
             
-            if (apiKey === 'YOUR_DODO_API_KEY') {
+            if (apiKey === 'YOUR_DODO_PAYMENTS_API_KEY') {
                 console.error('❌ API Key is still placeholder - environment variable not injected');
             } else {
                 console.log('✅ API Key appears to be injected');
             }
             
-            if (productKey === 'YOUR_DODO_PRODUCT_KEY') {
-                console.error('❌ Product Key is still placeholder - environment variable not injected');
+            if (productId === 'YOUR_DODO_PRODUCT_ID') {
+                console.error('❌ Product ID is still placeholder - environment variable not injected');
             } else {
-                console.log('✅ Product Key appears to be injected');
+                console.log('✅ Product ID appears to be injected');
             }
             
             return {
                 apiKey: apiKey,
-                productKey: productKey,
-                apiKeyInjected: apiKey !== 'YOUR_DODO_API_KEY',
-                productKeyInjected: productKey !== 'YOUR_DODO_PRODUCT_KEY'
+                productId: productId,
+                apiKeyInjected: apiKey !== 'YOUR_DODO_PAYMENTS_API_KEY',
+                productIdInjected: productId !== 'YOUR_DODO_PRODUCT_ID'
             };
         }
     </script>
