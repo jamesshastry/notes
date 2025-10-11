@@ -448,6 +448,14 @@
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
+        // Debug logging for configuration
+        console.log('🔧 Configuration Status:');
+        console.log('🔥 Firebase API Key:', FIREBASE_CONFIG.apiKey !== 'your-firebase-api-key' ? 'SET' : 'NOT SET');
+        console.log('🔥 Firebase Auth Domain:', FIREBASE_CONFIG.authDomain !== 'your-project-id.firebaseapp.com' ? 'SET' : 'NOT SET');
+        console.log('🔥 Firebase Project ID:', FIREBASE_CONFIG.projectId !== 'your-project-id' ? 'SET' : 'NOT SET');
+        console.log('🔗 Supabase URL:', SUPABASE_URL !== 'https://your-project-id.supabase.co' ? 'SET' : 'NOT SET');
+        console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY !== 'your-anon-key-here' ? 'SET' : 'NOT SET');
+        
         // Authentication state
         let currentUser = null;
         let isAuthenticated = false;
@@ -483,11 +491,16 @@
         // Google Sign-In
         function signInWithGoogle() {
             hideAuthError();
+            console.log('🔐 Starting Google Sign-In...');
+            console.log('🔥 Firebase config:', FIREBASE_CONFIG);
+            
             const provider = new firebase.auth.GoogleAuthProvider();
             
             auth.signInWithPopup(provider)
                 .then((result) => {
                     console.log('✅ Google Sign-In successful:', result.user);
+                    console.log('👤 User UID:', result.user.uid);
+                    console.log('📧 User email:', result.user.email);
                     currentUser = result.user;
                     isAuthenticated = true;
                     hideAuthModal();
@@ -505,6 +518,9 @@
                 })
                 .catch((error) => {
                     console.error('❌ Google Sign-In failed:', error);
+                    console.error('❌ Error code:', error.code);
+                    console.error('❌ Error message:', error.message);
+                    console.error('❌ Error details:', JSON.stringify(error, null, 2));
                     showAuthError(`Sign-in failed: ${error.message}`);
                 });
         }
@@ -531,8 +547,13 @@
         
         // Auth state listener
         auth.onAuthStateChanged((user) => {
+            console.log('🔥 Auth state changed:', user ? 'User authenticated' : 'User not authenticated');
+            
             if (user) {
                 console.log('🔥 User authenticated:', user.email);
+                console.log('👤 User UID:', user.uid);
+                console.log('📧 User email:', user.email);
+                console.log('👤 User display name:', user.displayName);
                 currentUser = user;
                 isAuthenticated = true;
                 hideAuthModal();
@@ -627,6 +648,8 @@
             async loadNotes() {
                 try {
                     console.log('📚 Loading notes for user:', this.user.id);
+                    console.log('🔗 Supabase URL:', SUPABASE_URL);
+                    console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
                     
                     const { data, error } = await supabaseClient
                         .from('notes')
@@ -636,13 +659,16 @@
                     
                     if (error) {
                         console.error('❌ Supabase error:', error);
+                        console.error('❌ Error details:', JSON.stringify(error, null, 2));
                         throw error;
                     }
                     
                     this.notes = data || [];
                     console.log('✅ Notes loaded from Supabase:', this.notes.length);
+                    console.log('📊 Notes data:', this.notes);
                 } catch (error) {
                     console.error('❌ Error loading notes:', error);
+                    console.error('❌ Error stack:', error.stack);
                     this.notes = [];
                     alert('Failed to load notes from Supabase. Please check your configuration.');
                 }
@@ -651,23 +677,29 @@
             async createNote(title, content) {
                 try {
                     console.log('📝 Creating note with title:', title);
+                    console.log('👤 User ID:', this.user.id);
+                    console.log('🔗 Supabase URL:', SUPABASE_URL);
+                    console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
+                    
+                    const noteData = {
+                        title: title.trim(),
+                        content: content.trim(),
+                        user_id: this.user.id,
+                        is_favorite: false,
+                        tags: []
+                    };
+                    
+                    console.log('📊 Inserting data:', noteData);
                     
                     const { data, error } = await supabaseClient
                         .from('notes')
-                        .insert([
-                            {
-                                title: title.trim(),
-                                content: content.trim(),
-                                user_id: this.user.id,
-                                is_favorite: false,
-                                tags: []
-                            }
-                        ])
+                        .insert([noteData])
                         .select()
                         .single();
                     
                     if (error) {
                         console.error('❌ Supabase error:', error);
+                        console.error('❌ Error details:', JSON.stringify(error, null, 2));
                         throw error;
                     }
                     
@@ -676,6 +708,7 @@
                     return data;
                 } catch (error) {
                     console.error('❌ Error creating note:', error);
+                    console.error('❌ Error stack:', error.stack);
                     alert('Failed to create note in Supabase. Please check your configuration.');
                     throw error;
                 }
@@ -683,20 +716,32 @@
             
             async updateNote(id, title, content) {
                 try {
+                    console.log('✏️ Updating note:', id);
+                    console.log('📝 New title:', title);
+                    console.log('👤 User ID:', this.user.id);
+                    
+                    const updateData = {
+                        title: title.trim(),
+                        content: content.trim()
+                    };
+                    
+                    console.log('📊 Update data:', updateData);
+                    
                     const { data, error } = await supabaseClient
                         .from('notes')
-                        .update({
-                            title: title.trim(),
-                            content: content.trim()
-                        })
+                        .update(updateData)
                         .eq('id', id)
                         .eq('user_id', this.user.id)
                         .select()
                         .single();
                     
                     if (error) {
+                        console.error('❌ Supabase update error:', error);
+                        console.error('❌ Error details:', JSON.stringify(error, null, 2));
                         throw error;
                     }
+                    
+                    console.log('✅ Note updated successfully:', data);
                     
                     const noteIndex = this.notes.findIndex(note => note.id === id);
                     if (noteIndex !== -1) {
@@ -705,7 +750,8 @@
                     
                     return data;
                 } catch (error) {
-                    console.error('Error updating note:', error);
+                    console.error('❌ Error updating note:', error);
+                    console.error('❌ Error stack:', error.stack);
                     alert('Failed to update note in Supabase. Please check your configuration.');
                     throw error;
                 }
@@ -713,6 +759,9 @@
             
             async deleteNote(id) {
                 try {
+                    console.log('🗑️ Deleting note:', id);
+                    console.log('👤 User ID:', this.user.id);
+                    
                     const { error } = await supabaseClient
                         .from('notes')
                         .delete()
@@ -720,12 +769,16 @@
                         .eq('user_id', this.user.id);
                     
                     if (error) {
+                        console.error('❌ Supabase delete error:', error);
+                        console.error('❌ Error details:', JSON.stringify(error, null, 2));
                         throw error;
                     }
                     
+                    console.log('✅ Note deleted successfully');
                     this.notes = this.notes.filter(note => note.id !== id);
                 } catch (error) {
-                    console.error('Error deleting note:', error);
+                    console.error('❌ Error deleting note:', error);
+                    console.error('❌ Error stack:', error.stack);
                     alert('Failed to delete note from Supabase. Please check your configuration.');
                     throw error;
                 }
@@ -862,6 +915,9 @@
             }
         }
         
+        // Initialize the app first
+        const notesApp = new NotesApp();
+        
         // Global functions for HTML onclick handlers
         function openCreateModal() {
             notesApp.openCreateModal();
@@ -874,9 +930,6 @@
         function clearAllNotes() {
             notesApp.clearAllNotes();
         }
-        
-        // Initialize the app
-        const notesApp = new NotesApp();
     </script>
 </body>
 </html>
