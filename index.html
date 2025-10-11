@@ -833,16 +833,17 @@
         auth.onAuthStateChanged((user) => {
             if (user) {
                 console.log('🔥 User authenticated:', user.email);
+                addDebugStep('Authentication', 'success', `User authenticated: ${user.email}`);
                 currentUser = user;
                 isAuthenticated = true;
                 hideAuthModal();
                 updateUserInfo(user);
                 testSupabaseConnection();
                 
-                // Initialize notes app
+                // Initialize notes app with Firebase user
                 if (window.notesApp) {
                     window.notesApp.user = {
-                        id: user.uid,
+                        id: user.uid,  // Firebase UID
                         email: user.email,
                         name: user.displayName
                     };
@@ -850,9 +851,19 @@
                 }
             } else {
                 console.log('🔥 User not authenticated');
+                addDebugStep('Authentication', 'info', 'User not authenticated');
                 currentUser = null;
                 isAuthenticated = false;
                 showAuthModal();
+                
+                // Reset notes app
+                if (window.notesApp) {
+                    window.notesApp.notes = [];
+                    window.notesApp.user = null;
+                    window.notesApp.isInitialized = false;
+                    window.notesApp.renderNotes();
+                    window.notesApp.updateStats();
+                }
             }
         });
         
@@ -876,6 +887,10 @@
         }
         
         function updateDebugInfo() {
+            // Update Firebase configuration status
+            const firebaseStatus = FIREBASE_CONFIG.apiKey !== 'your-firebase-api-key' ? 'success' : 'error';
+            const firebaseText = FIREBASE_CONFIG.apiKey !== 'your-firebase-api-key' ? 'Set' : 'Not Set';
+            
             // Update Supabase URL with detailed info
             const urlStatus = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id') ? 'success' : 'error';
             const urlText = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id') ? 'Set' : 'Not Set';
@@ -895,13 +910,14 @@
             }
             
             // Check if environment variables are properly injected
-            const isEnvInjected = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id') && 
-                                 SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('your-anon-key-here');
+            const isFirebaseConfigured = FIREBASE_CONFIG.apiKey !== 'your-firebase-api-key';
+            const isSupabaseConfigured = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id') && 
+                                       SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('your-anon-key-here');
             
-            if (isEnvInjected) {
-                addDebugStep('Environment', 'success', 'Environment variables properly injected');
+            if (isFirebaseConfigured && isSupabaseConfigured) {
+                addDebugStep('Environment', 'success', 'Firebase and Supabase properly configured');
             } else {
-                addDebugStep('Environment', 'error', 'Environment variables not properly injected');
+                addDebugStep('Environment', 'error', `Firebase: ${isFirebaseConfigured}, Supabase: ${isSupabaseConfigured}`);
             }
         }
         
@@ -956,19 +972,34 @@
                 this.currentFilter = 'all';
                 this.editingNoteId = null;
                 this.user = null;
-                this.init();
+                this.isInitialized = false;
                 
                 // Make app globally accessible for debug
                 window.notesApp = this;
+                
+                // Don't initialize immediately - wait for Firebase auth
+                console.log('📝 NotesApp created, waiting for Firebase authentication...');
             }
             
             async init() {
+                if (this.isInitialized) {
+                    console.log('📝 NotesApp already initialized');
+                    return;
+                }
+                
+                console.log('📝 Initializing NotesApp with Firebase user:', this.user);
+                addDebugStep('NotesApp', 'info', `Initializing for user: ${this.user.email}`);
+                
                 await this.checkAuth();
                 await this.loadNotes();
                 this.renderNotes();
                 this.updateStats();
                 this.bindEvents();
                 this.updateStatusIndicator();
+                
+                this.isInitialized = true;
+                console.log('✅ NotesApp initialized successfully');
+                addDebugStep('NotesApp', 'success', 'NotesApp initialized successfully');
             }
             
             async checkAuth() {
