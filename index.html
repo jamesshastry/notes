@@ -1453,15 +1453,15 @@
                         await this.deleteNote(id);
                         console.log('✅ Note deletion completed, refreshing view');
                         this.renderNotes();
-                        this.updateStats(); // Also update stats after deletion
                         
                         // Force refresh from database to ensure sync
                         console.log('🔄 Force refreshing notes from database');
                         await this.loadNotes();
                         this.renderNotes();
-                        this.updateStats();
+                        console.log('✅ View refreshed successfully');
                     } catch (error) {
                         console.error('❌ Error in confirmDeleteNote:', error);
+                        console.error('❌ Error stack:', error.stack);
                         alert('Failed to delete note. Please try again.');
                     }
                 }
