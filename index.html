@@ -1677,6 +1677,12 @@
                         // Update user status in Supabase (you might want to add a premium_users table)
                         await this.updateUserPremiumStatus(true);
                         
+                        // Refresh premium status from database (webhook should have updated it)
+                        console.log('🔄 Refreshing premium status after payment...');
+                        setTimeout(async () => {
+                            await this.refreshPremiumStatus();
+                        }, 2000); // Wait 2 seconds for webhook to process
+                        
                         // Clean URL
                         window.history.replaceState({}, document.title, window.location.pathname);
                         
@@ -1774,12 +1780,53 @@
                 }
             }
             
-            // Check if user has premium status (database-first with localStorage fallback)
+            // Check if user has premium status (subscription database-first with fallback)
             async isUserPremium() {
                 try {
                     console.log('🔍 Checking premium status for user:', this.user.id);
                     
-                    // First, try to get from database
+                    // First, try to get from subscription_status table
+                    const { data: subscription, error } = await supabaseClient
+                        .from('subscription_status')
+                        .select('status, subscription_id, updated_at')
+                        .eq('user_id', this.user.id)
+                        .order('updated_at', { ascending: false })
+                        .limit(1)
+                        .single();
+                    
+                    if (error && error.code !== 'PGRST116') {
+                        console.error('❌ Error checking subscription status:', error);
+                        // Fall back to user_profiles table
+                        return this.isUserPremiumFromUserProfiles();
+                    }
+                    
+                    if (subscription) {
+                        console.log('✅ Premium status from subscription table:', subscription.status);
+                        // Update localStorage to match database
+                        const premiumData = {
+                            user_id: this.user.id,
+                            is_premium: subscription.status,
+                            subscription_id: subscription.subscription_id,
+                            updated_at: new Date().toISOString()
+                        };
+                        localStorage.setItem('user_premium_status', JSON.stringify(premiumData));
+                        return subscription.status;
+                    }
+                    
+                    // No subscription found, check user_profiles table
+                    console.log('📝 No subscription found, checking user_profiles table...');
+                    return this.isUserPremiumFromUserProfiles();
+                    
+                } catch (error) {
+                    console.error('❌ Error in isUserPremium:', error);
+                    // Fall back to user_profiles table
+                    return this.isUserPremiumFromUserProfiles();
+                }
+            }
+            
+            // Helper method to check premium status from user_profiles table
+            async isUserPremiumFromUserProfiles() {
+                try {
                     const { data: profile, error } = await supabaseClient
                         .from('user_profiles')
                         .select('is_premium, premium_since')
@@ -1787,13 +1834,13 @@
                         .single();
                     
                     if (error && error.code !== 'PGRST116') {
-                        console.error('❌ Error checking database premium status:', error);
+                        console.error('❌ Error checking user_profiles premium status:', error);
                         // Fall back to localStorage
                         return this.isUserPremiumFromLocalStorage();
                     }
                     
                     if (profile) {
-                        console.log('✅ Premium status from database:', profile.is_premium);
+                        console.log('✅ Premium status from user_profiles:', profile.is_premium);
                         // Update localStorage to match database
                         const premiumData = {
                             user_id: this.user.id,
@@ -1805,11 +1852,11 @@
                     }
                     
                     // No profile found, check localStorage
-                    console.log('📝 No profile found in database, checking localStorage...');
+                    console.log('📝 No profile found in user_profiles, checking localStorage...');
                     return this.isUserPremiumFromLocalStorage();
                     
                 } catch (error) {
-                    console.error('❌ Error in isUserPremium:', error);
+                    console.error('❌ Error checking user_profiles:', error);
                     // Fall back to localStorage
                     return this.isUserPremiumFromLocalStorage();
                 }
@@ -1854,6 +1901,20 @@
                     upgradeButton.style.color = '';
                     upgradeButton.style.cursor = 'pointer';
                     upgradeButton.title = 'Upgrade to premium features';
+                }
+            }
+            
+            // Refresh premium status from database (useful after payment)
+            async refreshPremiumStatus() {
+                try {
+                    console.log('🔄 Refreshing premium status from database...');
+                    const isPremium = await this.isUserPremium();
+                    this.updatePremiumUI(isPremium);
+                    console.log('✅ Premium status refreshed:', isPremium);
+                    return isPremium;
+                } catch (error) {
+                    console.error('❌ Error refreshing premium status:', error);
+                    return false;
                 }
             }
         }

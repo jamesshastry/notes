@@ -202,6 +202,156 @@ app.post('/api/create-checkout', async (req, res) => {
     }
 });
 
+// Webhook endpoint for Dodo Payments subscription updates
+app.post('/api/payments/webhook', async (req, res) => {
+    try {
+        console.log('🔔 Payment webhook received');
+        console.log('📊 Webhook payload:', JSON.stringify(req.body, null, 2));
+        
+        // Verify webhook signature (if provided)
+        const webhookSecret = process.env.DODO_WEBHOOK_SECRET;
+        if (webhookSecret) {
+            const signature = req.headers['x-dodo-signature'] || req.headers['dodo-signature'];
+            if (signature) {
+                console.log('✅ Webhook signature received:', signature);
+                // Add signature verification logic here if needed
+            }
+        }
+        
+        const { data, type } = req.body;
+        
+        // Only process successful payments
+        if (type === 'payment.succeeded' && data.status === 'succeeded') {
+            console.log('✅ Processing successful payment webhook');
+            
+            const {
+                subscription_id,
+                payment_id,
+                checkout_session_id,
+                total_amount,
+                currency,
+                payment_method,
+                status: payment_status,
+                customer,
+                metadata
+            } = data;
+            
+            // Extract user information from metadata
+            const userId = metadata?.user_id;
+            const userEmail = metadata?.user_email || customer?.email;
+            
+            if (!userId || !userEmail) {
+                console.error('❌ Missing user information in webhook payload');
+                return res.status(400).json({
+                    success: false,
+                    error: 'Missing user information'
+                });
+            }
+            
+            console.log('👤 Processing subscription for user:', {
+                userId,
+                userEmail,
+                subscriptionId: subscription_id,
+                paymentId: payment_id
+            });
+            
+            // Check if subscription already exists
+            const { createClient } = require('@supabase/supabase-js');
+            const supabase = createClient(
+                process.env.SUPABASE_URL,
+                process.env.SUPABASE_ANON_KEY
+            );
+            
+            // Try to find existing subscription
+            const { data: existingSubscription, error: selectError } = await supabase
+                .from('subscription_status')
+                .select('*')
+                .eq('subscription_id', subscription_id)
+                .single();
+            
+            if (selectError && selectError.code !== 'PGRST116') {
+                console.error('❌ Error checking existing subscription:', selectError);
+                throw selectError;
+            }
+            
+            if (existingSubscription) {
+                // Update existing subscription
+                console.log('🔄 Updating existing subscription');
+                const { data: updatedSubscription, error: updateError } = await supabase
+                    .from('subscription_status')
+                    .update({
+                        status: true,
+                        payment_id,
+                        checkout_session_id,
+                        total_amount,
+                        currency,
+                        payment_method,
+                        payment_status,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('subscription_id', subscription_id)
+                    .select();
+                
+                if (updateError) {
+                    console.error('❌ Error updating subscription:', updateError);
+                    throw updateError;
+                }
+                
+                console.log('✅ Subscription updated successfully:', updatedSubscription);
+            } else {
+                // Create new subscription
+                console.log('➕ Creating new subscription');
+                const { data: newSubscription, error: insertError } = await supabase
+                    .from('subscription_status')
+                    .insert({
+                        user_id: userId,
+                        user_email: userEmail,
+                        subscription_id,
+                        status: true,
+                        payment_id,
+                        checkout_session_id,
+                        total_amount,
+                        currency,
+                        payment_method,
+                        payment_status
+                    })
+                    .select();
+                
+                if (insertError) {
+                    console.error('❌ Error creating subscription:', insertError);
+                    throw insertError;
+                }
+                
+                console.log('✅ Subscription created successfully:', newSubscription);
+            }
+            
+            // Return success response
+            res.json({
+                success: true,
+                message: 'Subscription status updated successfully',
+                subscription_id,
+                user_id: userId,
+                status: true
+            });
+            
+        } else {
+            console.log('ℹ️ Webhook received but not processing (not a successful payment)');
+            res.json({
+                success: true,
+                message: 'Webhook received but not processed'
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ Webhook processing error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            details: 'Failed to process webhook'
+        });
+    }
+});
+
 // Serve the main HTML file for all other routes (SPA behavior)
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
