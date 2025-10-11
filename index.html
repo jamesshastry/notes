@@ -691,7 +691,7 @@
                         window.notesApp.init();
                         
                         // Check and update premium status UI
-                        const isPremium = window.notesApp.isUserPremium();
+                        const isPremium = await window.notesApp.isUserPremium();
                         window.notesApp.updatePremiumUI(isPremium);
                     }
                 })
@@ -1664,37 +1664,138 @@
             
             async updateUserPremiumStatus(isPremium) {
                 try {
-                    console.log('🔄 Updating user premium status:', isPremium);
+                    console.log('🔄 Updating user premium status in database:', isPremium);
                     
-                    // Store premium status in localStorage for this user
+                    // First, try to update existing profile
+                    const { data: existingProfile, error: selectError } = await supabaseClient
+                        .from('user_profiles')
+                        .select('*')
+                        .eq('user_id', this.user.id)
+                        .single();
+                    
+                    if (selectError && selectError.code !== 'PGRST116') {
+                        console.error('❌ Error checking existing profile:', selectError);
+                        throw selectError;
+                    }
+                    
+                    if (existingProfile) {
+                        // Update existing profile
+                        const { data, error } = await supabaseClient
+                            .from('user_profiles')
+                            .update({
+                                is_premium: isPremium,
+                                premium_since: isPremium ? new Date().toISOString() : null
+                            })
+                            .eq('user_id', this.user.id)
+                            .select();
+                        
+                        if (error) {
+                            console.error('❌ Error updating profile:', error);
+                            throw error;
+                        }
+                        
+                        console.log('✅ Updated existing profile:', data);
+                    } else {
+                        // Create new profile
+                        const { data, error } = await supabaseClient
+                            .from('user_profiles')
+                            .insert({
+                                user_id: this.user.id,
+                                email: this.user.email,
+                                name: this.user.name,
+                                is_premium: isPremium,
+                                premium_since: isPremium ? new Date().toISOString() : null
+                            })
+                            .select();
+                        
+                        if (error) {
+                            console.error('❌ Error creating profile:', error);
+                            throw error;
+                        }
+                        
+                        console.log('✅ Created new profile:', data);
+                    }
+                    
+                    // Also store in localStorage as backup
                     const premiumData = {
                         user_id: this.user.id,
                         is_premium: isPremium,
                         updated_at: new Date().toISOString()
                     };
-                    
                     localStorage.setItem('user_premium_status', JSON.stringify(premiumData));
                     
                     // Update the UI to reflect premium status
                     this.updatePremiumUI(isPremium);
                     
-                    console.log('✅ User premium status updated:', premiumData);
+                    console.log('✅ User premium status updated in database and UI');
                     
                 } catch (error) {
                     console.error('❌ Error updating premium status:', error);
+                    // Fallback to localStorage if database fails
+                    console.log('🔄 Falling back to localStorage...');
+                    const premiumData = {
+                        user_id: this.user.id,
+                        is_premium: isPremium,
+                        updated_at: new Date().toISOString()
+                    };
+                    localStorage.setItem('user_premium_status', JSON.stringify(premiumData));
+                    this.updatePremiumUI(isPremium);
                 }
             }
             
-            // Check if user has premium status
-            isUserPremium() {
+            // Check if user has premium status (database-first with localStorage fallback)
+            async isUserPremium() {
+                try {
+                    console.log('🔍 Checking premium status for user:', this.user.id);
+                    
+                    // First, try to get from database
+                    const { data: profile, error } = await supabaseClient
+                        .from('user_profiles')
+                        .select('is_premium, premium_since')
+                        .eq('user_id', this.user.id)
+                        .single();
+                    
+                    if (error && error.code !== 'PGRST116') {
+                        console.error('❌ Error checking database premium status:', error);
+                        // Fall back to localStorage
+                        return this.isUserPremiumFromLocalStorage();
+                    }
+                    
+                    if (profile) {
+                        console.log('✅ Premium status from database:', profile.is_premium);
+                        // Update localStorage to match database
+                        const premiumData = {
+                            user_id: this.user.id,
+                            is_premium: profile.is_premium,
+                            updated_at: new Date().toISOString()
+                        };
+                        localStorage.setItem('user_premium_status', JSON.stringify(premiumData));
+                        return profile.is_premium;
+                    }
+                    
+                    // No profile found, check localStorage
+                    console.log('📝 No profile found in database, checking localStorage...');
+                    return this.isUserPremiumFromLocalStorage();
+                    
+                } catch (error) {
+                    console.error('❌ Error in isUserPremium:', error);
+                    // Fall back to localStorage
+                    return this.isUserPremiumFromLocalStorage();
+                }
+            }
+            
+            // Helper method to check premium status from localStorage
+            isUserPremiumFromLocalStorage() {
                 try {
                     const premiumData = localStorage.getItem('user_premium_status');
                     if (!premiumData) return false;
                     
                     const data = JSON.parse(premiumData);
-                    return data.user_id === this.user.id && data.is_premium === true;
+                    const isPremium = data.user_id === this.user.id && data.is_premium === true;
+                    console.log('📱 Premium status from localStorage:', isPremium);
+                    return isPremium;
                 } catch (error) {
-                    console.error('❌ Error checking premium status:', error);
+                    console.error('❌ Error checking localStorage premium status:', error);
                     return false;
                 }
             }
