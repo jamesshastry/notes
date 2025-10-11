@@ -1561,8 +1561,8 @@
                     console.log('📊 Payment data:', paymentData);
                     console.log('🌐 Making API request to:', 'https://test.dodopayments.com/checkouts');
                     
-                    // For debugging - let's try a simple test first
-                    console.log('🧪 Testing API connectivity...');
+                    // Call Dodo Payments checkout API
+                    console.log('🧪 Calling Dodo Payments API...');
                     
                     // Create checkout session with Dodo Payments
                     const response = await fetch('https://test.dodopayments.com/checkouts', {
@@ -1636,24 +1636,7 @@
                         errorMessage += 'Please try again.';
                     }
                     
-                    // For debugging - show a demo mode option
-                    if (confirm(errorMessage + '\n\nWould you like to see a demo of what the payment flow would look like?')) {
-                        this.showPaymentDemo();
-                    } else {
-                        alert(errorMessage);
-                    }
-                }
-            }
-            
-            showPaymentDemo() {
-                console.log('🎭 Showing payment demo');
-                alert('🎭 DEMO MODE\n\nIn a real payment flow, this would:\n1. Open Dodo Payments checkout in a new window\n2. Process your payment securely\n3. Return you to this app with premium access\n\nTo enable real payments, configure your Dodo Payments API keys in Render.');
-                
-                // Simulate a successful payment for demo
-                if (confirm('Would you like to simulate a successful payment for testing?')) {
-                    console.log('🎭 Simulating successful payment');
-                    this.updateUserPremiumStatus(true);
-                    alert('🎉 Demo: Payment successful! Welcome to Premium!');
+                    alert(errorMessage);
                 }
             }
             
