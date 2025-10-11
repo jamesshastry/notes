@@ -13,10 +13,47 @@ const injectEnvVars = (req, res, next) => {
         
         // Log environment variables for debugging
         console.log('🔧 Environment Variables:');
+        console.log('FIREBASE_API_KEY:', process.env.FIREBASE_API_KEY ? 'SET' : 'NOT SET');
+        console.log('FIREBASE_AUTH_DOMAIN:', process.env.FIREBASE_AUTH_DOMAIN || 'NOT SET');
+        console.log('FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID || 'NOT SET');
+        console.log('FIREBASE_STORAGE_BUCKET:', process.env.FIREBASE_STORAGE_BUCKET || 'NOT SET');
+        console.log('FIREBASE_MESSAGING_SENDER_ID:', process.env.FIREBASE_MESSAGING_SENDER_ID || 'NOT SET');
+        console.log('FIREBASE_APP_ID:', process.env.FIREBASE_APP_ID || 'NOT SET');
         console.log('SUPABASE_URL:', process.env.SUPABASE_URL || 'NOT SET');
         console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
         
-        // Replace placeholder values with environment variables
+        // Replace Firebase configuration placeholders
+        html = html.replace(
+            'your-firebase-api-key',
+            process.env.FIREBASE_API_KEY || 'your-firebase-api-key'
+        );
+        
+        html = html.replace(
+            'your-project-id.firebaseapp.com',
+            process.env.FIREBASE_AUTH_DOMAIN || 'your-project-id.firebaseapp.com'
+        );
+        
+        html = html.replace(
+            'your-project-id',
+            process.env.FIREBASE_PROJECT_ID || 'your-project-id'
+        );
+        
+        html = html.replace(
+            'your-project-id.appspot.com',
+            process.env.FIREBASE_STORAGE_BUCKET || 'your-project-id.appspot.com'
+        );
+        
+        html = html.replace(
+            'your-sender-id',
+            process.env.FIREBASE_MESSAGING_SENDER_ID || 'your-sender-id'
+        );
+        
+        html = html.replace(
+            'your-app-id',
+            process.env.FIREBASE_APP_ID || 'your-app-id'
+        );
+        
+        // Replace Supabase configuration placeholders
         html = html.replace(
             'https://your-project-id.supabase.co',
             process.env.SUPABASE_URL || 'https://your-project-id.supabase.co'

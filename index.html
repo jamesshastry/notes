@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📝 Smart Notes App</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <!-- Supabase CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -548,6 +551,33 @@
         </div>
     </div>
 
+    <!-- Authentication Modal -->
+    <div id="authModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 20000;">
+        <div style="background: white; padding: 40px; border-radius: 15px; text-align: center; max-width: 400px; width: 90%;">
+            <h2 style="margin-bottom: 20px; color: #333;">🔐 Sign In Required</h2>
+            <p style="margin-bottom: 30px; color: #666;">Please sign in with Google to access your notes</p>
+            <button id="googleSignInBtn" style="background: #4285f4; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; margin: 0 auto; gap: 10px;">
+                <svg width="20" height="20" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Sign in with Google
+            </button>
+            <div id="authError" style="margin-top: 20px; color: #e74c3c; display: none;"></div>
+        </div>
+    </div>
+
+    <!-- User Info Bar -->
+    <div id="userInfoBar" style="background: #2c3e50; color: white; padding: 10px 20px; display: none; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img id="userAvatar" src="" alt="User Avatar" style="width: 32px; height: 32px; border-radius: 50%;">
+            <span id="userName">User Name</span>
+        </div>
+        <button id="signOutBtn" style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">Sign Out</button>
+    </div>
+
     <!-- Debug Toggle Button -->
     <button id="debugToggleBtn" onclick="toggleDebugOverlay()" style="position: fixed; top: 10px; right: 10px; background: #007bff; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; z-index: 10001; font-size: 16px;">🔧</button>
 
@@ -646,52 +676,189 @@
     <!-- Hidden file input for import -->
     <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileImport(event)">
     
-    <!-- Supabase Configuration -->
+    <!-- Firebase Configuration -->
     <script>
+        // Firebase Configuration - reads from environment variables
+        const FIREBASE_CONFIG = {
+            apiKey: 'your-firebase-api-key',
+            authDomain: 'your-project-id.firebaseapp.com',
+            projectId: 'your-project-id',
+            storageBucket: 'your-project-id.appspot.com',
+            messagingSenderId: 'your-sender-id',
+            appId: 'your-app-id'
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(FIREBASE_CONFIG);
+        const auth = firebase.auth();
+        
         // Supabase Configuration - reads from environment variables
         const SUPABASE_URL = 'https://your-project-id.supabase.co'; // Replace with your actual URL
         const SUPABASE_ANON_KEY = 'your-anon-key-here'; // Replace with your actual key
         
         // Debug logging
-        console.log('🔧 Client-side Supabase Configuration:');
+        console.log('🔧 Client-side Configuration:');
+        console.log('🔥 Firebase configured:', FIREBASE_CONFIG.apiKey !== 'your-firebase-api-key');
         console.log('🔗 SUPABASE_URL:', SUPABASE_URL);
         console.log('🔑 SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
-        console.log('🔑 Key length:', SUPABASE_ANON_KEY ? SUPABASE_ANON_KEY.length : 0);
         
         // Check if credentials are properly injected
-        const isConfigured = SUPABASE_URL && 
-                            !SUPABASE_URL.includes('your-project-id') && 
-                            SUPABASE_ANON_KEY && 
-                            !SUPABASE_ANON_KEY.includes('your-anon-key-here');
+        const isFirebaseConfigured = FIREBASE_CONFIG.apiKey !== 'your-firebase-api-key';
+        const isSupabaseConfigured = SUPABASE_URL && 
+                                   !SUPABASE_URL.includes('your-project-id') && 
+                                   SUPABASE_ANON_KEY && 
+                                   !SUPABASE_ANON_KEY.includes('your-anon-key-here');
         
-        console.log('✅ Supabase configured:', isConfigured);
+        console.log('✅ Firebase configured:', isFirebaseConfigured);
+        console.log('✅ Supabase configured:', isSupabaseConfigured);
         
         // Initialize Supabase client
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
-        // Test connection with detailed debugging
-        console.log('🧪 Testing Supabase connection...');
-        addDebugStep('Connection', 'info', 'Testing Supabase connection...');
+        // Authentication state
+        let currentUser = null;
+        let isAuthenticated = false;
         
-        supabaseClient.from('notes').select('count').then(({ data, error }) => {
-            if (error) {
-                console.error('❌ Supabase connection test failed:', error);
-                updateDebugConnection('error', 'Connection Failed');
-                addDebugStep('Connection', 'error', `Failed: ${error.message}`);
-                document.getElementById('debugDbStatus').innerHTML = `<span class="debug-status error">Database Error</span>`;
+        // Test Supabase connection (only after auth)
+        function testSupabaseConnection() {
+            console.log('🧪 Testing Supabase connection...');
+            addDebugStep('Connection', 'info', 'Testing Supabase connection...');
+            
+            supabaseClient.from('notes').select('count').then(({ data, error }) => {
+                if (error) {
+                    console.error('❌ Supabase connection test failed:', error);
+                    updateDebugConnection('error', 'Connection Failed');
+                    addDebugStep('Connection', 'error', `Failed: ${error.message}`);
+                    document.getElementById('debugDbStatus').innerHTML = `<span class="debug-status error">Database Error</span>`;
+                } else {
+                    console.log('✅ Supabase connection test successful:', data);
+                    updateDebugConnection('success', 'Connected');
+                    addDebugStep('Connection', 'success', 'Successfully connected to Supabase');
+                    document.getElementById('debugDbStatus').innerHTML = `<span class="debug-status success">Database Ready</span>`;
+                }
+            }).catch(err => {
+                console.error('❌ Connection test error:', err);
+                updateDebugConnection('error', 'Connection Error');
+                addDebugStep('Connection', 'error', `Error: ${err.message}`);
+                document.getElementById('debugDbStatus').innerHTML = `<span class="debug-status error">Connection Error</span>`;
+            });
+        }
+        
+        // Authentication functions
+        function showAuthModal() {
+            document.getElementById('authModal').style.display = 'flex';
+            document.getElementById('userInfoBar').style.display = 'none';
+            document.querySelector('.container').style.display = 'none';
+        }
+        
+        function hideAuthModal() {
+            document.getElementById('authModal').style.display = 'none';
+            document.getElementById('userInfoBar').style.display = 'flex';
+            document.querySelector('.container').style.display = 'block';
+        }
+        
+        function showAuthError(message) {
+            const errorDiv = document.getElementById('authError');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function hideAuthError() {
+            document.getElementById('authError').style.display = 'none';
+        }
+        
+        function updateUserInfo(user) {
+            document.getElementById('userAvatar').src = user.photoURL || 'https://via.placeholder.com/32';
+            document.getElementById('userName').textContent = user.displayName || user.email;
+            document.getElementById('debugUserId').innerHTML = `<span class="debug-status success">${user.email}</span>`;
+        }
+        
+        // Google Sign-In
+        function signInWithGoogle() {
+            hideAuthError();
+            const provider = new firebase.auth.GoogleAuthProvider();
+            
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    console.log('✅ Google Sign-In successful:', result.user);
+                    addDebugStep('Authentication', 'success', `Signed in as ${result.user.email}`);
+                    currentUser = result.user;
+                    isAuthenticated = true;
+                    hideAuthModal();
+                    updateUserInfo(result.user);
+                    testSupabaseConnection();
+                    
+                    // Initialize notes app after authentication
+                    if (window.notesApp) {
+                        window.notesApp.user = {
+                            id: result.user.uid,
+                            email: result.user.email,
+                            name: result.user.displayName
+                        };
+                        window.notesApp.init();
+                    }
+                })
+                .catch((error) => {
+                    console.error('❌ Google Sign-In failed:', error);
+                    addDebugStep('Authentication', 'error', `Sign-in failed: ${error.message}`);
+                    showAuthError(`Sign-in failed: ${error.message}`);
+                });
+        }
+        
+        // Sign Out
+        function signOut() {
+            auth.signOut()
+                .then(() => {
+                    console.log('✅ Sign-out successful');
+                    addDebugStep('Authentication', 'info', 'User signed out');
+                    currentUser = null;
+                    isAuthenticated = false;
+                    showAuthModal();
+                    
+                    // Clear notes app
+                    if (window.notesApp) {
+                        window.notesApp.notes = [];
+                        window.notesApp.renderNotes();
+                        window.notesApp.updateStats();
+                    }
+                })
+                .catch((error) => {
+                    console.error('❌ Sign-out failed:', error);
+                    addDebugStep('Authentication', 'error', `Sign-out failed: ${error.message}`);
+                });
+        }
+        
+        // Auth state listener
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                console.log('🔥 User authenticated:', user.email);
+                currentUser = user;
+                isAuthenticated = true;
+                hideAuthModal();
+                updateUserInfo(user);
+                testSupabaseConnection();
+                
+                // Initialize notes app
+                if (window.notesApp) {
+                    window.notesApp.user = {
+                        id: user.uid,
+                        email: user.email,
+                        name: user.displayName
+                    };
+                    window.notesApp.init();
+                }
             } else {
-                console.log('✅ Supabase connection test successful:', data);
-                updateDebugConnection('success', 'Connected');
-                addDebugStep('Connection', 'success', 'Successfully connected to Supabase');
-                document.getElementById('debugDbStatus').innerHTML = `<span class="debug-status success">Database Ready</span>`;
+                console.log('🔥 User not authenticated');
+                currentUser = null;
+                isAuthenticated = false;
+                showAuthModal();
             }
-        }).catch(err => {
-            console.error('❌ Connection test error:', err);
-            updateDebugConnection('error', 'Connection Error');
-            addDebugStep('Connection', 'error', `Error: ${err.message}`);
-            document.getElementById('debugDbStatus').innerHTML = `<span class="debug-status error">Connection Error</span>`;
         });
+        
+        // Event listeners
+        document.getElementById('googleSignInBtn').addEventListener('click', signInWithGoogle);
+        document.getElementById('signOutBtn').addEventListener('click', signOut);
         
         // Debug overlay functions
         function toggleDebugOverlay() {
@@ -805,31 +972,10 @@
             }
             
             async checkAuth() {
-                try {
-                    console.log('🔧 Checking Supabase connection...');
-                    console.log('🔗 Supabase URL:', SUPABASE_URL);
-                    console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY ? 'Set' : 'Not set');
-                    
-                    const { data: { user }, error } = await supabaseClient.auth.getUser();
-                    if (error) throw error;
-                    
-                    if (user) {
-                        this.user = user;
-                        console.log('✅ User authenticated:', user.email);
-                        document.getElementById('debugUserId').innerHTML = `<span class="debug-status success">${user.email}</span>`;
-                    } else {
-                        // For demo purposes, we'll use a guest user
-                        // In production, you'd redirect to login
-                        console.log('⚠️ No user authenticated, using guest mode');
-                        this.user = { id: 'guest-user-id' };
-                        document.getElementById('debugUserId').innerHTML = `<span class="debug-status warning">Guest User</span>`;
-                    }
-                } catch (error) {
-                    console.error('❌ Auth error:', error);
-                    console.log('🔄 Falling back to guest mode');
-                    // Fallback to guest mode
-                    this.user = { id: 'guest-user-id' };
-                }
+                // Firebase authentication is handled by the auth state listener
+                // This method is now just a placeholder
+                console.log('🔧 Firebase authentication handled by auth state listener');
+                addDebugStep('Authentication', 'info', 'Using Firebase authentication');
             }
             
             bindEvents() {
