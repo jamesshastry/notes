@@ -9,6 +9,16 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <!-- Supabase CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=YOUR_GOOGLE_ANALYTICS_ID"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'YOUR_GOOGLE_ANALYTICS_ID');
+    </script>
+    
     <style>
         * {
             margin: 0;
@@ -681,6 +691,9 @@
                     hideAuthModal();
                     updateUserInfo(result.user);
                     
+                    // Track successful authentication
+                    trackAuthAction('sign_in_success', 'Google');
+                    
                     // Initialize notes app after authentication
                     if (window.notesApp) {
                         window.notesApp.user = {
@@ -712,6 +725,9 @@
                     currentUser = null;
                     isAuthenticated = false;
                     showAuthModal();
+                    
+                    // Track sign out
+                    trackAuthAction('sign_out', 'Google');
                     
                     // Clear notes app
                     if (window.notesApp) {
@@ -1072,6 +1088,9 @@
                     }
                     
                     console.log('✅ Note deleted successfully from database');
+                    
+                    // Track note deletion
+                    trackNoteAction('note_deleted', noteIdToDelete);
                     
                     // Update the notes array using the actual note ID
                     const initialLength = this.notes.length;
@@ -1478,8 +1497,14 @@
                         const existingAttachments = existingNote.attachments || [];
                         attachments = [...existingAttachments, ...attachments];
                         await this.updateNote(this.editingNoteId, title, content, attachments);
+                        
+                        // Track note update
+                        trackNoteAction('note_updated', this.editingNoteId);
                     } else {
                         await this.createNote(title, content, attachments);
+                        
+                        // Track note creation
+                        trackNoteAction('note_created', 'new_note');
                     }
                     
                     this.closeModal();
@@ -1544,6 +1569,9 @@
                     
                     // Call our server endpoint instead of Dodo Payments API directly (avoids CORS)
                     console.log('🌐 Calling server endpoint: /api/create-checkout');
+                    
+                    // Track premium upgrade attempt
+                    trackPremiumAction('premium_upgrade_attempt', 'Dodo Payments');
                     
                     const response = await fetch('/api/create-checkout', {
                         method: 'POST',
@@ -1642,6 +1670,9 @@
                     if (paymentStatus === 'success') {
                         console.log('✅ Payment successful!');
                         alert('🎉 Payment successful! Welcome to Premium!');
+                        
+                        // Track premium conversion
+                        trackPremiumAction('premium_upgrade_success', 'Dodo Payments');
                         
                         // Update user status in Supabase (you might want to add a premium_users table)
                         await this.updateUserPremiumStatus(true);
@@ -1907,6 +1938,47 @@
                 productIdInjected: productId !== 'YOUR_DODO_PRODUCT_ID'
             };
         }
+        
+        // Google Analytics Event Tracking Functions
+        function trackEvent(eventName, eventCategory, eventLabel, value) {
+            if (typeof gtag !== 'undefined') {
+                gtag('event', eventName, {
+                    event_category: eventCategory,
+                    event_label: eventLabel,
+                    value: value
+                });
+                console.log('📊 GA Event tracked:', eventName, eventCategory, eventLabel);
+            }
+        }
+        
+        function trackPageView(pageName) {
+            if (typeof gtag !== 'undefined') {
+                gtag('config', 'YOUR_GOOGLE_ANALYTICS_ID', {
+                    page_title: pageName,
+                    page_location: window.location.href
+                });
+                console.log('📊 GA Page view tracked:', pageName);
+            }
+        }
+        
+        function trackUserAction(action, details) {
+            trackEvent(action, 'User Action', details);
+        }
+        
+        function trackNoteAction(action, noteId) {
+            trackEvent(action, 'Note Management', noteId);
+        }
+        
+        function trackPremiumAction(action, details) {
+            trackEvent(action, 'Premium Features', details);
+        }
+        
+        function trackAuthAction(action, method) {
+            trackEvent(action, 'Authentication', method);
+        }
+        
+        // Track app initialization
+        trackPageView('Notes App - Main Page');
     </script>
 </body>
 </html>

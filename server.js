@@ -24,6 +24,7 @@ const injectEnvVars = (req, res, next) => {
         console.log('DODO_PAYMENTS_API_KEY:', process.env.DODO_PAYMENTS_API_KEY ? 'SET' : 'NOT SET');
         console.log('DODO_PRODUCT_ID:', process.env.DODO_PRODUCT_ID ? 'SET' : 'NOT SET');
         console.log('DODO_WEBHOOK_SECRET:', process.env.DODO_WEBHOOK_SECRET ? 'SET' : 'NOT SET');
+        console.log('GOOGLE_ANALYTICS_ID:', process.env.GOOGLE_ANALYTICS_ID ? 'SET' : 'NOT SET');
         
         // Replace Firebase configuration placeholders
         html = html.replace(
@@ -76,6 +77,12 @@ const injectEnvVars = (req, res, next) => {
         html = html.replace(
             'YOUR_DODO_PRODUCT_ID',
             process.env.DODO_PRODUCT_ID || 'YOUR_DODO_PRODUCT_ID'
+        );
+        
+        // Replace Google Analytics configuration placeholders
+        html = html.replace(
+            'YOUR_GOOGLE_ANALYTICS_ID',
+            process.env.GOOGLE_ANALYTICS_ID || 'YOUR_GOOGLE_ANALYTICS_ID'
         );
         
         res.send(html);
