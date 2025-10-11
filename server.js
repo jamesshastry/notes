@@ -22,6 +22,7 @@ const injectEnvVars = (req, res, next) => {
         console.log('SUPABASE_URL:', process.env.SUPABASE_URL || 'NOT SET');
         console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
         console.log('DODO_API_KEY:', process.env.DODO_API_KEY ? 'SET' : 'NOT SET');
+        console.log('DODO_PRODUCT_KEY:', process.env.DODO_PRODUCT_KEY ? 'SET' : 'NOT SET');
         console.log('DODO_WEBHOOK_SECRET:', process.env.DODO_WEBHOOK_SECRET ? 'SET' : 'NOT SET');
         
         // Replace Firebase configuration placeholders
@@ -70,6 +71,11 @@ const injectEnvVars = (req, res, next) => {
         html = html.replace(
             'YOUR_DODO_API_KEY',
             process.env.DODO_API_KEY || 'YOUR_DODO_API_KEY'
+        );
+        
+        html = html.replace(
+            'YOUR_DODO_PRODUCT_KEY',
+            process.env.DODO_PRODUCT_KEY || 'YOUR_DODO_PRODUCT_KEY'
         );
         
         res.send(html);
