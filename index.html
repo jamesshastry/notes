@@ -505,17 +505,19 @@
 </head>
 <body>
     <!-- Debug Overlay -->
-    <div id="debugOverlay" style="position: fixed; top: 10px; right: 10px; width: 300px; background: rgba(0,0,0,0.9); color: white; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px; z-index: 10000; max-height: 400px; overflow-y: auto; display: none;">
+    <div id="debugOverlay" style="position: fixed; top: 10px; right: 10px; width: 350px; background: rgba(0,0,0,0.95); color: white; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 11px; z-index: 10000; max-height: 500px; overflow-y: auto; display: none; border: 2px solid #00ff00;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0; color: #00ff00;">🔧 Debug Console</h3>
+            <h3 style="margin: 0; color: #00ff00;">🔧 Supabase Debug Console</h3>
             <button id="toggleDebug" onclick="toggleDebugOverlay()" style="background: #333; color: white; border: 1px solid #666; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Hide</button>
         </div>
         <div id="debugContent">
             <div class="debug-item">
                 <strong>🔗 Supabase URL:</strong> <span id="debugUrl">Checking...</span>
+                <div id="debugUrlValue" style="font-size: 10px; color: #ccc; margin-top: 2px;"></div>
             </div>
             <div class="debug-item">
                 <strong>🔑 Supabase Key:</strong> <span id="debugKey">Checking...</span>
+                <div id="debugKeyValue" style="font-size: 10px; color: #ccc; margin-top: 2px;"></div>
             </div>
             <div class="debug-item">
                 <strong>👤 User ID:</strong> <span id="debugUserId">Checking...</span>
@@ -532,9 +534,16 @@
             <div class="debug-item">
                 <strong>📝 Notes Count:</strong> <span id="debugNotesCount">0</span>
             </div>
+            <div class="debug-item">
+                <strong>🗄️ Database Status:</strong> <span id="debugDbStatus">Unknown</span>
+            </div>
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #444;">
+                <strong>📋 Operation Steps:</strong>
+                <div id="debugSteps" style="max-height: 120px; overflow-y: auto; margin-top: 5px;"></div>
+            </div>
             <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #444;">
                 <strong>📋 Recent Logs:</strong>
-                <div id="debugLogs" style="max-height: 150px; overflow-y: auto; margin-top: 5px;"></div>
+                <div id="debugLogs" style="max-height: 120px; overflow-y: auto; margin-top: 5px;"></div>
             </div>
         </div>
     </div>
@@ -661,16 +670,27 @@
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
-        // Test connection
+        // Test connection with detailed debugging
         console.log('🧪 Testing Supabase connection...');
+        addDebugStep('Connection', 'info', 'Testing Supabase connection...');
+        
         supabaseClient.from('notes').select('count').then(({ data, error }) => {
             if (error) {
                 console.error('❌ Supabase connection test failed:', error);
                 updateDebugConnection('error', 'Connection Failed');
+                addDebugStep('Connection', 'error', `Failed: ${error.message}`);
+                document.getElementById('debugDbStatus').innerHTML = `<span class="debug-status error">Database Error</span>`;
             } else {
                 console.log('✅ Supabase connection test successful:', data);
                 updateDebugConnection('success', 'Connected');
+                addDebugStep('Connection', 'success', 'Successfully connected to Supabase');
+                document.getElementById('debugDbStatus').innerHTML = `<span class="debug-status success">Database Ready</span>`;
             }
+        }).catch(err => {
+            console.error('❌ Connection test error:', err);
+            updateDebugConnection('error', 'Connection Error');
+            addDebugStep('Connection', 'error', `Error: ${err.message}`);
+            document.getElementById('debugDbStatus').innerHTML = `<span class="debug-status error">Connection Error</span>`;
         });
         
         // Debug overlay functions
@@ -689,19 +709,32 @@
         }
         
         function updateDebugInfo() {
-            // Update Supabase URL
+            // Update Supabase URL with detailed info
             const urlStatus = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id') ? 'success' : 'error';
             const urlText = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id') ? 'Set' : 'Not Set';
             document.getElementById('debugUrl').innerHTML = `<span class="debug-status ${urlStatus}">${urlText}</span>`;
+            document.getElementById('debugUrlValue').textContent = SUPABASE_URL || 'NOT SET';
             
-            // Update Supabase Key
+            // Update Supabase Key with detailed info
             const keyStatus = SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('your-anon-key-here') ? 'success' : 'error';
             const keyText = SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('your-anon-key-here') ? 'Set' : 'Not Set';
             document.getElementById('debugKey').innerHTML = `<span class="debug-status ${keyStatus}">${keyText}</span>`;
+            document.getElementById('debugKeyValue').textContent = SUPABASE_ANON_KEY ? 
+                `${SUPABASE_ANON_KEY.substring(0, 20)}...` : 'NOT SET';
             
             // Update Notes Count
             if (window.notesApp) {
                 document.getElementById('debugNotesCount').textContent = window.notesApp.notes.length;
+            }
+            
+            // Check if environment variables are properly injected
+            const isEnvInjected = SUPABASE_URL && !SUPABASE_URL.includes('your-project-id') && 
+                                 SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('your-anon-key-here');
+            
+            if (isEnvInjected) {
+                addDebugStep('Environment', 'success', 'Environment variables properly injected');
+            } else {
+                addDebugStep('Environment', 'error', 'Environment variables not properly injected');
             }
         }
         
@@ -714,6 +747,20 @@
             document.getElementById('debugLastOp').innerHTML = `<span class="debug-status ${statusClass}">${operation}</span>`;
             if (details) {
                 addDebugLog(operation, status, details);
+            }
+        }
+        
+        function addDebugStep(step, type, message) {
+            const stepsDiv = document.getElementById('debugSteps');
+            const stepDiv = document.createElement('div');
+            stepDiv.className = `debug-log ${type}`;
+            stepDiv.textContent = `[${new Date().toLocaleTimeString()}] ${step}: ${message}`;
+            
+            stepsDiv.insertBefore(stepDiv, stepsDiv.firstChild);
+            
+            // Keep only last 8 steps
+            while (stepsDiv.children.length > 8) {
+                stepsDiv.removeChild(stepsDiv.lastChild);
             }
         }
         
@@ -877,6 +924,9 @@
                     console.log('👤 User ID:', this.user.id);
                     console.log('🔧 Using localStorage:', this.useLocalStorage);
                     console.log('🔗 Supabase URL:', SUPABASE_URL);
+                    
+                    addDebugStep('Create Note', 'info', `Starting note creation: "${title}"`);
+                    addDebugStep('Create Note', 'info', `User ID: ${this.user.id}`);
                     
                     // Check if we should use localStorage fallback
                     if (this.useLocalStorage || !SUPABASE_URL || SUPABASE_URL.includes('your-project-id')) {
