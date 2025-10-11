@@ -443,6 +443,9 @@
         <div class="header">
             <h1>📝 Smart Notes App</h1>
             <p>Organize your thoughts, ideas, and memories in one place</p>
+            <div id="statusIndicator" style="margin-top: 10px; font-size: 0.9rem; opacity: 0.8;">
+                🔄 Checking connection...
+            </div>
         </div>
         
         <div class="main-content">
@@ -561,24 +564,30 @@
                 this.renderNotes();
                 this.updateStats();
                 this.bindEvents();
+                this.updateStatusIndicator();
             }
             
             async checkAuth() {
                 try {
+                    console.log('🔧 Checking Supabase connection...');
+                    console.log('🔗 Supabase URL:', SUPABASE_URL);
+                    console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY ? 'Set' : 'Not set');
+                    
                     const { data: { user }, error } = await supabaseClient.auth.getUser();
                     if (error) throw error;
                     
                     if (user) {
                         this.user = user;
-                        console.log('User authenticated:', user.email);
+                        console.log('✅ User authenticated:', user.email);
                     } else {
                         // For demo purposes, we'll use a guest user
                         // In production, you'd redirect to login
-                        console.log('No user authenticated, using guest mode');
+                        console.log('⚠️ No user authenticated, using guest mode');
                         this.user = { id: 'guest-user-id' };
                     }
                 } catch (error) {
-                    console.error('Auth error:', error);
+                    console.error('❌ Auth error:', error);
+                    console.log('🔄 Falling back to guest mode');
                     // Fallback to guest mode
                     this.user = { id: 'guest-user-id' };
                 }
@@ -619,20 +628,47 @@
             
             async loadNotes() {
                 try {
+                    console.log('📚 Loading notes for user:', this.user.id);
+                    
+                    // Check if Supabase is properly configured
+                    if (!SUPABASE_URL || SUPABASE_URL.includes('your-project-id')) {
+                        console.warn('⚠️ Supabase not configured, using localStorage fallback');
+                        this.useLocalStorage = true;
+                        this.loadNotesFromLocalStorage();
+                        this.updateStatusIndicator();
+                        return;
+                    }
+                    
                     const { data, error } = await supabaseClient
                         .from('notes')
                         .select('*')
                         .eq('user_id', this.user.id)
                         .order('created_at', { ascending: false });
                     
-                    if (error) throw error;
+                    if (error) {
+                        console.error('❌ Supabase error:', error);
+                        console.log('🔄 Falling back to localStorage');
+                        this.useLocalStorage = true;
+                        this.loadNotesFromLocalStorage();
+                        this.updateStatusIndicator();
+                        return;
+                    }
                     
                     this.notes = data || [];
-                    console.log('Notes loaded:', this.notes.length);
+                    console.log('✅ Notes loaded from Supabase:', this.notes.length);
                 } catch (error) {
-                    console.error('Error loading notes:', error);
-                    this.notes = [];
+                    console.error('❌ Error loading notes:', error);
+                    console.log('🔄 Falling back to localStorage');
+                    this.useLocalStorage = true;
+                    this.loadNotesFromLocalStorage();
+                    this.updateStatusIndicator();
                 }
+            }
+            
+            loadNotesFromLocalStorage() {
+                const saved = localStorage.getItem('smartNotes');
+                this.notes = saved ? JSON.parse(saved) : [];
+                console.log('📱 Notes loaded from localStorage:', this.notes.length);
             }
             
             async saveNotes() {
@@ -642,6 +678,13 @@
             
             async createNote(title, content) {
                 try {
+                    // Check if we should use localStorage fallback
+                    if (this.useLocalStorage || !SUPABASE_URL || SUPABASE_URL.includes('your-project-id')) {
+                        console.log('📱 Creating note in localStorage');
+                        return this.createNoteInLocalStorage(title, content);
+                    }
+                    
+                    console.log('🗄️ Creating note in Supabase');
                     const { data, error } = await supabaseClient
                         .from('notes')
                         .insert([
@@ -656,20 +699,49 @@
                         .select()
                         .single();
                     
-                    if (error) throw error;
+                    if (error) {
+                        console.error('❌ Supabase error:', error);
+                        console.log('🔄 Falling back to localStorage');
+                        this.useLocalStorage = true;
+                        return this.createNoteInLocalStorage(title, content);
+                    }
                     
                     this.notes.unshift(data);
                     this.updateStats();
+                    console.log('✅ Note created in Supabase');
                     return data;
                 } catch (error) {
-                    console.error('Error creating note:', error);
-                    alert('Failed to create note. Please try again.');
-                    return null;
+                    console.error('❌ Error creating note:', error);
+                    console.log('🔄 Falling back to localStorage');
+                    this.useLocalStorage = true;
+                    return this.createNoteInLocalStorage(title, content);
                 }
+            }
+            
+            createNoteInLocalStorage(title, content) {
+                const note = {
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                    title: title.trim(),
+                    content: content.trim(),
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    is_favorite: false,
+                    tags: []
+                };
+                
+                this.notes.unshift(note);
+                localStorage.setItem('smartNotes', JSON.stringify(this.notes));
+                this.updateStats();
+                console.log('✅ Note created in localStorage');
+                return note;
             }
             
             async updateNote(id, title, content) {
                 try {
+                    if (this.useLocalStorage) {
+                        return this.updateNoteInLocalStorage(id, title, content);
+                    }
+                    
                     const { data, error } = await supabaseClient
                         .from('notes')
                         .update({
@@ -692,13 +764,31 @@
                     return data;
                 } catch (error) {
                     console.error('Error updating note:', error);
-                    alert('Failed to update note. Please try again.');
-                    return null;
+                    this.useLocalStorage = true;
+                    return this.updateNoteInLocalStorage(id, title, content);
                 }
+            }
+            
+            updateNoteInLocalStorage(id, title, content) {
+                const noteIndex = this.notes.findIndex(note => note.id === id);
+                if (noteIndex !== -1) {
+                    this.notes[noteIndex].title = title.trim();
+                    this.notes[noteIndex].content = content.trim();
+                    this.notes[noteIndex].updated_at = new Date().toISOString();
+                    localStorage.setItem('smartNotes', JSON.stringify(this.notes));
+                    this.updateStats();
+                    return this.notes[noteIndex];
+                }
+                return null;
             }
             
             async deleteNote(id) {
                 try {
+                    if (this.useLocalStorage) {
+                        this.deleteNoteInLocalStorage(id);
+                        return;
+                    }
+                    
                     const { error } = await supabaseClient
                         .from('notes')
                         .delete()
@@ -711,8 +801,15 @@
                     this.updateStats();
                 } catch (error) {
                     console.error('Error deleting note:', error);
-                    alert('Failed to delete note. Please try again.');
+                    this.useLocalStorage = true;
+                    this.deleteNoteInLocalStorage(id);
                 }
+            }
+            
+            deleteNoteInLocalStorage(id) {
+                this.notes = this.notes.filter(note => note.id !== id);
+                localStorage.setItem('smartNotes', JSON.stringify(this.notes));
+                this.updateStats();
             }
             
             async toggleFavorite(id) {
@@ -843,6 +940,17 @@
                 document.getElementById('totalNotes').textContent = totalNotes;
                 document.getElementById('recentNotes').textContent = recentNotes;
                 document.getElementById('totalWords').textContent = totalWords;
+            }
+            
+            updateStatusIndicator() {
+                const statusElement = document.getElementById('statusIndicator');
+                if (this.useLocalStorage) {
+                    statusElement.innerHTML = '📱 Using local storage (Supabase not configured)';
+                    statusElement.style.color = '#ffa500';
+                } else {
+                    statusElement.innerHTML = '🗄️ Connected to Supabase database';
+                    statusElement.style.color = '#51cf66';
+                }
             }
             
             openCreateModal() {
