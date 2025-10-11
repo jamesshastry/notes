@@ -818,6 +818,18 @@
                     this.notes = data || [];
                     console.log('✅ Notes loaded from Supabase:', this.notes.length);
                     console.log('📊 Notes data:', this.notes);
+                    
+                    // Debug ID types
+                    if (this.notes.length > 0) {
+                        console.log('🔍 ID type analysis:');
+                        this.notes.forEach((note, index) => {
+                            console.log(`Note ${index + 1}:`, {
+                                id: note.id,
+                                idType: typeof note.id,
+                                title: note.title
+                            });
+                        });
+                    }
                 } catch (error) {
                     console.error('❌ Error loading notes:', error);
                     console.error('❌ Error stack:', error.stack);
@@ -1296,14 +1308,33 @@
             editNote(id) {
                 try {
                     console.log('✏️ Edit note clicked for ID:', id);
-                    console.log('📊 Available notes:', this.notes.map(note => ({ id: note.id, title: note.title })));
+                    console.log('📊 ID type:', typeof id);
+                    console.log('📊 Available notes:', this.notes.map(note => ({ 
+                        id: note.id, 
+                        idType: typeof note.id, 
+                        title: note.title 
+                    })));
                     
-                    const note = this.notes.find(note => note.id === id);
+                    // Try to find note with both string and number ID
+                    let note = this.notes.find(note => note.id === id);
+                    
+                    // If not found, try converting ID to number
+                    if (!note && !isNaN(id)) {
+                        console.log('🔄 Trying to find note with numeric ID:', Number(id));
+                        note = this.notes.find(note => note.id === Number(id));
+                    }
+                    
+                    // If still not found, try converting ID to string
+                    if (!note) {
+                        console.log('🔄 Trying to find note with string ID:', String(id));
+                        note = this.notes.find(note => note.id === String(id));
+                    }
+                    
                     console.log('🔍 Found note:', note);
                     
                     if (note) {
                         console.log('✅ Opening edit modal for note:', note.title);
-                        this.editingNoteId = id;
+                        this.editingNoteId = note.id; // Use the actual note ID from the database
                         this.selectedFiles = []; // Reset selected files for editing
                         
                         // Update modal content
@@ -1325,6 +1356,8 @@
                         console.log('✅ Edit modal opened successfully');
                     } else {
                         console.error('❌ Note not found with ID:', id);
+                        console.error('❌ Available note IDs:', this.notes.map(n => n.id));
+                        console.error('❌ ID comparison failed for:', id);
                         alert('Note not found. Please refresh the page and try again.');
                     }
                 } catch (error) {
