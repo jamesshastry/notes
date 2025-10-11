@@ -915,9 +915,24 @@
                     
                     console.log('✅ Note updated successfully:', data);
                     
-                    const noteIndex = this.notes.findIndex(note => note.id === id);
+                    // Find note index with ID type handling
+                    let noteIndex = this.notes.findIndex(note => note.id === id);
+                    
+                    // If not found, try converting ID to number
+                    if (noteIndex === -1 && !isNaN(id)) {
+                        noteIndex = this.notes.findIndex(note => note.id === Number(id));
+                    }
+                    
+                    // If still not found, try converting ID to string
+                    if (noteIndex === -1) {
+                        noteIndex = this.notes.findIndex(note => note.id === String(id));
+                    }
+                    
                     if (noteIndex !== -1) {
                         this.notes[noteIndex] = data;
+                        console.log('✅ Updated note in local array at index:', noteIndex);
+                    } else {
+                        console.warn('⚠️ Note not found in local array for update, this might indicate a sync issue');
                     }
                     
                     return data;
@@ -932,11 +947,32 @@
             async deleteNote(id) {
                 try {
                     console.log('🗑️ Deleting note:', id);
+                    console.log('📊 ID type:', typeof id);
                     console.log('👤 User ID:', this.user.id);
                     console.log('📊 Notes count before deletion:', this.notes.length);
+                    console.log('📊 Available notes:', this.notes.map(note => ({ 
+                        id: note.id, 
+                        idType: typeof note.id, 
+                        title: note.title 
+                    })));
                     
-                    // Find the note to get attachments
-                    const note = this.notes.find(note => note.id === id);
+                    // Try to find note with both string and number ID
+                    let note = this.notes.find(note => note.id === id);
+                    
+                    // If not found, try converting ID to number
+                    if (!note && !isNaN(id)) {
+                        console.log('🔄 Trying to find note with numeric ID:', Number(id));
+                        note = this.notes.find(note => note.id === Number(id));
+                    }
+                    
+                    // If still not found, try converting ID to string
+                    if (!note) {
+                        console.log('🔄 Trying to find note with string ID:', String(id));
+                        note = this.notes.find(note => note.id === String(id));
+                    }
+                    
+                    console.log('🔍 Found note for deletion:', note);
+                    
                     if (note && note.attachments && note.attachments.length > 0) {
                         console.log('📎 Found note with attachments:', note.attachments.length);
                         console.log('📎 Attachment details:', note.attachments);
@@ -975,10 +1011,14 @@
                         console.log('📎 Note has no attachments to delete');
                     }
                     
+                    // Use the actual note ID from the database for the delete operation
+                    const noteIdToDelete = note ? note.id : id;
+                    console.log('🗑️ Deleting note with ID:', noteIdToDelete);
+                    
                     const { error } = await supabaseClient
                         .from('notes')
                         .delete()
-                        .eq('id', id)
+                        .eq('id', noteIdToDelete)
                         .eq('user_id', this.user.id);
                     
                     if (error) {
@@ -989,9 +1029,9 @@
                     
                     console.log('✅ Note deleted successfully from database');
                     
-                    // Update the notes array
+                    // Update the notes array using the actual note ID
                     const initialLength = this.notes.length;
-                    this.notes = this.notes.filter(note => note.id !== id);
+                    this.notes = this.notes.filter(note => note.id !== noteIdToDelete);
                     const finalLength = this.notes.length;
                     
                     console.log('📊 Notes array updated:', {
