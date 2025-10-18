@@ -1,0 +1,47 @@
+name: NotesApp-iOS
+options:
+  bundleIdPrefix: com.notesapp
+  deploymentTarget:
+    iOS: "15.0"
+  developmentLanguage: en
+
+settings:
+  PRODUCT_NAME: NotesApp
+  PRODUCT_BUNDLE_IDENTIFIER: com.notesapp.ios
+  INFOPLIST_FILE: NotesApp-iOS/Info.plist
+  SWIFT_VERSION: "5.0"
+  TARGETED_DEVICE_FAMILY: "1,2"
+
+targets:
+  NotesApp-iOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - NotesApp-iOS
+    info:
+      path: NotesApp-iOS/Info.plist
+      properties:
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchStoryboardName: LaunchScreen
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLSchemes:
+              - notesapp
+    settings:
+      INFOPLIST_FILE: NotesApp-iOS/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.notesapp.ios
+      SWIFT_VERSION: "5.0"
+      TARGETED_DEVICE_FAMILY: "1,2"
+
