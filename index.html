@@ -694,19 +694,8 @@
                     // Track successful authentication
                     trackAuthAction('sign_in_success', 'Google');
                     
-                    // Initialize notes app after authentication
-                    if (window.notesApp) {
-                        window.notesApp.user = {
-                            id: result.user.uid,
-                            email: result.user.email,
-                            name: result.user.displayName
-                        };
-                        window.notesApp.init();
-                        
-                        // Check and update premium status UI
-                        const isPremium = await window.notesApp.isUserPremium();
-                        window.notesApp.updatePremiumUI(isPremium);
-                    }
+                    // Note: App initialization is handled by onAuthStateChanged listener
+                    // No need to initialize here to avoid race condition
                 })
                 .catch((error) => {
                     console.error('❌ Google Sign-In failed:', error);
@@ -741,7 +730,7 @@
         }
         
         // Auth state listener
-        auth.onAuthStateChanged((user) => {
+        auth.onAuthStateChanged(async (user) => {
             console.log('🔥 Auth state changed:', user ? 'User authenticated' : 'User not authenticated');
             
             if (user) {
@@ -761,7 +750,11 @@
                         email: user.email,
                         name: user.displayName
                     };
-                    window.notesApp.init();
+                    await window.notesApp.init();
+                    
+                    // Check and update premium status UI after initialization
+                    const isPremium = await window.notesApp.isUserPremium();
+                    window.notesApp.updatePremiumUI(isPremium);
                 }
             } else {
                 console.log('🔥 User not authenticated');
@@ -774,6 +767,7 @@
                     window.notesApp.notes = [];
                     window.notesApp.user = null;
                     window.notesApp.isInitialized = false;
+                    window.notesApp.keyboardShortcutsBound = false;
                     window.notesApp.renderNotes();
                 }
             }
@@ -791,7 +785,9 @@
                 this.editingNoteId = null;
                 this.user = null;
                 this.isInitialized = false;
+                this.keyboardShortcutsBound = false; // Track keyboard shortcuts binding
                 this.selectedFiles = []; // Store selected files for upload
+                this.isSaving = false; // Prevent duplicate submissions
                 
                 // Make app globally accessible
                 window.notesApp = this;
@@ -800,12 +796,22 @@
             }
             
             async init() {
+                console.log('🔄 init() called, isInitialized:', this.isInitialized);
+                console.log('📊 Stack trace:', new Error().stack);
+                
                 if (this.isInitialized) {
-                    console.log('📝 NotesApp already initialized');
+                    console.log('⚠️ NotesApp already initialized, skipping...');
                     return;
                 }
                 
+                // Set flag immediately to prevent race condition
+                this.isInitialized = true;
+                console.log('✅ Setting isInitialized = true');
+                
                 console.log('📝 Initializing NotesApp with Firebase user:', this.user);
+                
+                // Create or update user profile on first login
+                await this.ensureUserProfile();
                 
                 await this.loadNotes();
                 this.renderNotes();
@@ -822,39 +828,150 @@
                 console.log('💳 Checking payment status...');
                 await this.checkPaymentStatus();
                 
-                this.isInitialized = true;
                 console.log('✅ NotesApp initialized successfully');
             }
             
+            async ensureUserProfile() {
+                try {
+                    console.log('👤 Ensuring user profile exists...');
+                    console.log('📊 User info:', {
+                        id: this.user.id,
+                        email: this.user.email,
+                        name: this.user.name
+                    });
+                    
+                    // Check if profile already exists
+                    const { data: existingProfile, error: selectError } = await supabaseClient
+                        .from('user_profiles')
+                        .select('*')
+                        .eq('user_id', this.user.id)
+                        .single();
+                    
+                    if (selectError && selectError.code !== 'PGRST116') {
+                        console.error('❌ Error checking existing profile:', selectError);
+                        throw selectError;
+                    }
+                    
+                    if (existingProfile) {
+                        console.log('✅ User profile already exists:', existingProfile);
+                        
+                        // Update profile with latest info from Firebase
+                        const { data: updatedProfile, error: updateError } = await supabaseClient
+                            .from('user_profiles')
+                            .update({
+                                email: this.user.email,
+                                name: this.user.name
+                            })
+                            .eq('user_id', this.user.id)
+                            .select();
+                        
+                        if (updateError) {
+                            console.warn('⚠️ Could not update profile:', updateError);
+                        } else {
+                            console.log('✅ Updated profile:', updatedProfile);
+                        }
+                    } else {
+                        console.log('➕ Creating new user profile...');
+                        
+                        // Create new profile
+                        const { data: newProfile, error: insertError } = await supabaseClient
+                            .from('user_profiles')
+                            .insert({
+                                user_id: this.user.id,
+                                email: this.user.email,
+                                name: this.user.name,
+                                is_premium: false,
+                                premium_since: null
+                            })
+                            .select();
+                        
+                        if (insertError) {
+                            console.error('❌ Error creating profile:', insertError);
+                            console.error('❌ Error details:', JSON.stringify(insertError, null, 2));
+                            
+                            // Check if it's a missing column error
+                            if (insertError.message && insertError.message.includes('column')) {
+                                console.error('❌ Table schema issue - some columns may be missing');
+                                console.error('💡 Please check SUPABASE_USER_PROFILES_SETUP.md and ensure all columns exist');
+                            }
+                            
+                            throw insertError;
+                        }
+                        
+                        console.log('✅ Created new user profile:', newProfile);
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Error ensuring user profile:', error);
+                    console.error('❌ Error stack:', error.stack);
+                    // Don't throw - allow app to continue working even if profile creation fails
+                    console.warn('⚠️ Continuing without user profile...');
+                }
+            }
+            
             bindEvents() {
+                console.log('🔗 bindEvents() called');
+                console.log('📊 Stack trace:', new Error().stack);
+                
+                // Remove any existing event listeners first to prevent duplicates
+                const noteForm = document.getElementById('noteForm');
+                const searchInput = document.getElementById('searchInput');
+                const fileUpload = document.getElementById('fileUpload');
+                
+                console.log('🔄 Cloning and replacing form elements to remove old listeners');
+                
+                // Clone and replace form to remove all event listeners
+                const newNoteForm = noteForm.cloneNode(true);
+                noteForm.parentNode.replaceChild(newNoteForm, noteForm);
+                
+                const newSearchInput = searchInput.cloneNode(true);
+                searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+                
+                const newFileUpload = fileUpload.cloneNode(true);
+                fileUpload.parentNode.replaceChild(newFileUpload, fileUpload);
+                
+                console.log('✅ Form elements cloned and replaced');
+                
                 // Search functionality
                 document.getElementById('searchInput').addEventListener('input', (e) => {
                     this.searchNotes(e.target.value);
                 });
+                console.log('✅ Search listener bound');
                 
                 // Form submission
                 document.getElementById('noteForm').addEventListener('submit', (e) => {
+                    console.log('📝 Form submit event triggered');
                     e.preventDefault();
                     this.saveNote();
                 });
+                console.log('✅ Form submit listener bound');
                 
                 // File upload
                 document.getElementById('fileUpload').addEventListener('change', (e) => {
                     this.handleFileSelection(e.target.files);
                 });
+                console.log('✅ File upload listener bound');
                 
-                // Keyboard shortcuts
-                document.addEventListener('keydown', (e) => {
-                    if (e.ctrlKey || e.metaKey) {
-                        switch(e.key) {
-                            case 'n': e.preventDefault(); this.openCreateModal(); break;
-                            case 'f': e.preventDefault(); document.getElementById('searchInput').focus(); break;
+                // Keyboard shortcuts (only bind once)
+                if (!this.keyboardShortcutsBound) {
+                    document.addEventListener('keydown', (e) => {
+                        if (e.ctrlKey || e.metaKey) {
+                            switch(e.key) {
+                                case 'n': e.preventDefault(); this.openCreateModal(); break;
+                                case 'f': e.preventDefault(); document.getElementById('searchInput').focus(); break;
+                            }
                         }
-                    }
-                    if (e.key === 'Escape') {
-                        this.closeModal();
-                    }
-                });
+                        if (e.key === 'Escape') {
+                            this.closeModal();
+                        }
+                    });
+                    this.keyboardShortcutsBound = true;
+                    console.log('✅ Keyboard shortcuts bound');
+                } else {
+                    console.log('⏭️ Keyboard shortcuts already bound, skipping');
+                }
+                
+                console.log('✅ All event listeners bound successfully');
             }
             
             async loadNotes() {
@@ -900,11 +1017,14 @@
             
             async createNote(title, content, attachments = []) {
                 try {
+                    console.log('➕ ===== CREATE NOTE START =====');
                     console.log('📝 Creating note with title:', title);
+                    console.log('📝 Content:', content);
                     console.log('👤 User ID:', this.user.id);
                     console.log('🔗 Supabase URL:', SUPABASE_URL);
                     console.log('🔑 Supabase Key:', SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
                     console.log('📎 Attachments:', attachments);
+                    console.log('📊 Current notes count before insert:', this.notes.length);
                     
                     const noteData = {
                         title: title.trim(),
@@ -916,6 +1036,7 @@
                     };
                     
                     console.log('📊 Inserting data:', noteData);
+                    console.log('🔄 Calling Supabase insert...');
                     
                     const { data, error } = await supabaseClient
                         .from('notes')
@@ -923,14 +1044,21 @@
                         .select()
                         .single();
                     
+                    console.log('✅ Supabase insert completed');
+                    console.log('📊 Response data:', data);
+                    console.log('📊 Response error:', error);
+                    
                     if (error) {
                         console.error('❌ Supabase error:', error);
                         console.error('❌ Error details:', JSON.stringify(error, null, 2));
                         throw error;
                     }
                     
-                    console.log('✅ Note created successfully in Supabase:', data);
+                    console.log('✅ Note created successfully in Supabase with ID:', data.id);
+                    console.log('📊 Adding note to local array...');
                     this.notes.unshift(data);
+                    console.log('📊 Current notes count after insert:', this.notes.length);
+                    console.log('➕ ===== CREATE NOTE END =====');
                     return data;
                 } catch (error) {
                     console.error('❌ Error creating note:', error);
@@ -1131,8 +1259,19 @@
                 console.log('🔄 Rendering notes:', {
                     notesCount: notes.length,
                     notesToRender: notesToRender ? 'filtered' : 'all',
-                    notes: notes.map(note => ({ id: note.id, title: note.title }))
+                    notes: notes.map(note => ({ id: note.id, title: note.title, created_at: note.created_at }))
                 });
+                
+                // Check for duplicates by ID
+                const ids = notes.map(n => n.id);
+                const uniqueIds = [...new Set(ids)];
+                if (ids.length !== uniqueIds.length) {
+                    console.error('⚠️ DUPLICATE IDs DETECTED IN NOTES ARRAY!');
+                    console.error('📊 Total notes:', ids.length);
+                    console.error('📊 Unique IDs:', uniqueIds.length);
+                    console.error('📊 Duplicate count:', ids.length - uniqueIds.length);
+                    console.error('📊 All IDs:', ids);
+                }
                 
                 if (notes.length === 0) {
                     console.log('📭 No notes to display, showing empty state');
@@ -1471,6 +1610,12 @@
             }
             
             async saveNote() {
+                // Prevent duplicate submissions
+                if (this.isSaving) {
+                    console.warn('⚠️ Save already in progress, ignoring duplicate request');
+                    return;
+                }
+                
                 const title = document.getElementById('noteTitle').value;
                 const content = document.getElementById('noteContent').value;
                 
@@ -1478,6 +1623,18 @@
                     alert('Please fill in both title and content!');
                     return;
                 }
+                
+                // Set saving flag
+                this.isSaving = true;
+                const saveBtn = document.getElementById('saveBtn');
+                const originalBtnText = saveBtn.textContent;
+                saveBtn.textContent = 'Saving...';
+                saveBtn.disabled = true;
+                
+                console.log('💾 Starting save operation...');
+                console.log('📝 Title:', title);
+                console.log('📝 Content:', content);
+                console.log('✏️ Editing note ID:', this.editingNoteId);
                 
                 try {
                     // Upload files first if any are selected
@@ -1496,22 +1653,31 @@
                         const existingNote = this.notes.find(note => note.id === this.editingNoteId);
                         const existingAttachments = existingNote.attachments || [];
                         attachments = [...existingAttachments, ...attachments];
+                        console.log('✏️ Updating existing note:', this.editingNoteId);
                         await this.updateNote(this.editingNoteId, title, content, attachments);
                         
                         // Track note update
                         trackNoteAction('note_updated', this.editingNoteId);
                     } else {
+                        console.log('➕ Creating new note');
                         await this.createNote(title, content, attachments);
                         
                         // Track note creation
                         trackNoteAction('note_created', 'new_note');
                     }
                     
+                    console.log('✅ Save operation completed successfully');
                     this.closeModal();
                     this.renderNotes();
                 } catch (error) {
                     console.error('❌ Error saving note:', error);
                     alert('Failed to save note. Please try again.');
+                } finally {
+                    // Reset saving flag and button state
+                    this.isSaving = false;
+                    saveBtn.textContent = originalBtnText;
+                    saveBtn.disabled = false;
+                    console.log('🔓 Save lock released');
                 }
             }
             
